@@ -57,7 +57,7 @@
         {
           "foreground": "darkGray",
           "style": "plain",
-          "template": "[{{ .CurrentDate | date .Format }} {{ dateInZone \"15:04Z\" .CurrentDate \"UTC\" }}]",
+          "template": "[{{ .CurrentDate | date .Format }}]",
           "type": "time"
         },
         {
