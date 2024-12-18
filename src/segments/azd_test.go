@@ -6,19 +6,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 func TestAzdSegment(t *testing.T) {
 	cases := []struct {
 		Case            string
-		ExpectedEnabled bool
 		ExpectedString  string
 		Template        string
+		ExpectedEnabled bool
 		IsInited        bool
 	}{
 		{
@@ -35,16 +34,16 @@ func TestAzdSegment(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
-		env.On("Debug", mock2.Anything)
+		env := new(mock.Environment)
+		env.On("Flags").Return(&runtime.Flags{})
 
 		if tc.IsInited {
-			fileInfo := &platform.FileInfo{
+			fileInfo := &runtime.FileInfo{
 				Path:         "test/.azure",
 				ParentFolder: "test",
 				IsDir:        true,
 			}
-			env.On("HasParentFilePath", ".azure").Return(fileInfo, nil)
+			env.On("HasParentFilePath", ".azure", false).Return(fileInfo, nil)
 			dirEntries := []fs.DirEntry{
 				&MockDirEntry{
 					name:  "config.json",
@@ -58,13 +57,11 @@ func TestAzdSegment(t *testing.T) {
 
 			env.On("FileContent", filepath.Join("test", ".azure", "config.json")).Return(`{"version": 1, "defaultEnvironment": "TestEnvironment"}`, nil)
 		} else {
-			env.On("HasParentFilePath", ".azure").Return(&platform.FileInfo{}, errors.New("no such file or directory"))
+			env.On("HasParentFilePath", ".azure", false).Return(&runtime.FileInfo{}, errors.New("no such file or directory"))
 		}
 
-		azd := Azd{
-			env:   env,
-			props: properties.Map{},
-		}
+		azd := Azd{}
+		azd.Init(properties.Map{}, env)
 
 		assert.Equal(t, tc.ExpectedEnabled, azd.Enabled(), tc.Case)
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, tc.Template, azd), tc.Case)

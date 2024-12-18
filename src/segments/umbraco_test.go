@@ -7,19 +7,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 func TestUmbracoSegment(t *testing.T) {
 	cases := []struct {
 		Case                    string
-		ExpectedEnabled         bool
 		ExpectedString          string
 		Template                string
+		ExpectedEnabled         bool
 		HasUmbracoFolder        bool
 		HasCsproj               bool
 		HasWebConfig            bool
@@ -108,7 +108,7 @@ func TestUmbracoSegment(t *testing.T) {
 
 	for _, tc := range cases {
 		// Prepare/arrange the test
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		var sampleCSProj, sampleWebConfig, sampleNonUmbracoCSProj string
 
 		if tc.HasCsproj {
@@ -136,19 +136,18 @@ func TestUmbracoSegment(t *testing.T) {
 		env.On("FileContent", filepath.Join(umbracoProjectDirectory, "MyProject.csproj")).Return(sampleCSProj)
 		env.On("FileContent", filepath.Join(umbracoProjectDirectory, "ANonUmbracoProject.csproj")).Return(sampleNonUmbracoCSProj)
 		env.On("FileContent", filepath.Join(umbracoProjectDirectory, "web.config")).Return(sampleWebConfig)
-		env.On("Debug", mock2.Anything)
 
 		if tc.HasUmbracoFolder {
-			fileInfo := &platform.FileInfo{
+			fileInfo := &runtime.FileInfo{
 				Path:         "/workspace/MyProject/Umbraco",
 				ParentFolder: "/workspace/MyProject",
 				IsDir:        true,
 			}
 
-			env.On("HasParentFilePath", "umbraco").Return(fileInfo, nil)
+			env.On("HasParentFilePath", "umbraco", false).Return(fileInfo, nil)
 		} else {
-			env.On("HasParentFilePath", "Umbraco").Return(&platform.FileInfo{}, errors.New("no such file or directory"))
-			env.On("HasParentFilePath", "umbraco").Return(&platform.FileInfo{}, errors.New("no such file or directory"))
+			env.On("HasParentFilePath", "Umbraco", false).Return(&runtime.FileInfo{}, errors.New("no such file or directory"))
+			env.On("HasParentFilePath", "umbraco", false).Return(&runtime.FileInfo{}, errors.New("no such file or directory"))
 		}
 
 		dirEntries := []fs.DirEntry{}
@@ -176,9 +175,8 @@ func TestUmbracoSegment(t *testing.T) {
 		env.On("LsDir", umbracoProjectDirectory).Return(dirEntries)
 
 		// Setup the Umbraco segment with the mocked environment & properties
-		umb := &Umbraco{
-			env: env,
-		}
+		umb := &Umbraco{}
+		umb.Init(properties.Map{}, env)
 
 		// Assert the test results
 		// Check if the segment should be enabled and

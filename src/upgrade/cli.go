@@ -1,36 +1,19 @@
-//go:build windows || darwin
-
 package upgrade
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform/net"
 )
 
 var (
 	program   *tea.Program
 	textStyle = lipgloss.NewStyle().Margin(1, 0, 2, 0)
 	title     string
-)
-
-const (
-	upgradeNotice = `
-A new release of Oh My Posh is available: %s → %s
-To upgrade, run: 'oh-my-posh upgrade'
-
-To enable automated upgrades, set 'auto_upgrade' to 'true' in your configuration.
-`
-	Supported = true
 )
 
 type resultMsg string
@@ -40,42 +23,56 @@ type state int
 const (
 	validating state = iota
 	downloading
+	verifying
 	installing
 )
 
 func setState(message state) {
+	if program == nil {
+		return
+	}
+
 	program.Send(stateMsg(message))
 }
 
 type stateMsg state
 
 type model struct {
-	spinner spinner.Model
+	error   error
+	config  *Config
 	message string
+	spinner spinner.Model
 	state   state
 }
 
-func initialModel() *model {
+func initialModel(cfg *Config) *model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
-	return &model{spinner: s}
+	return &model{spinner: s, config: cfg}
 }
 
 func (m *model) Init() tea.Cmd {
-	defer func() {
-		go func() {
-			if err := install(); err != nil {
-				message := fmt.Sprintf("⚠️  %s", err)
-				program.Send(resultMsg(message))
-				return
-			}
-
-			program.Send(resultMsg(successMsg))
-		}()
-	}()
+	go m.start()
 
 	return m.spinner.Tick
+}
+
+func (m *model) start() {
+	if err := install(m.config); err != nil {
+		m.error = err
+		program.Send(resultMsg(fmt.Sprintf("❌ upgrade failed: %v", err)))
+		return
+	}
+
+	message := "🚀 Upgrade successful"
+
+	current := fmt.Sprintf("v%s", build.Version)
+	if current != m.config.Version {
+		message += ", restart your shell to take full advantage of the new functionality"
+	}
+
+	program.Send(resultMsg(message))
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -110,53 +107,55 @@ func (m *model) View() string {
 
 	var message string
 	m.spinner.Spinner = spinner.Dot
+
 	switch m.state {
 	case validating:
 		message = "Validating current installation"
 	case downloading:
 		m.spinner.Spinner = spinner.Globe
-		message = "Downloading latest version"
+		message = fmt.Sprintf("Downloading latest version from %s", m.config.Source.String())
+	case verifying:
+		m.spinner.Spinner = spinner.Moon
+		message = "Verifying download"
 	case installing:
+		m.spinner.Spinner = spinner.Jump
 		message = "Installing"
 	}
 
 	return title + textStyle.Render(fmt.Sprintf("%s %s", m.spinner.View(), message))
 }
 
-func Run(env platform.Environment) {
+func Run(cfg *Config) error {
 	titleStyle := lipgloss.NewStyle().Margin(1, 0, 1, 0)
-	title = "📦  Upgrading Oh My Posh"
+	title = "📦 Upgrading Oh My Posh"
 
-	version, err := Latest(env)
-	if err == nil {
-		title = fmt.Sprintf("%s from %s to %s", title, build.Version, version)
+	current := fmt.Sprintf("v%s", build.Version)
+	if len(current) == 0 {
+		current = "dev"
 	}
 
+	title = fmt.Sprintf("%s from %s to %s", title, current, cfg.Version)
 	title = titleStyle.Render(title)
 
-	program = tea.NewProgram(initialModel())
-	if _, err := program.Run(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	program = tea.NewProgram(initialModel(cfg))
+	resultModel, _ := program.Run()
+
+	programModel, OK := resultModel.(*model)
+	if !OK {
+		return nil
 	}
+
+	return programModel.error
 }
 
-func downloadAsset(asset string) (io.ReadCloser, error) {
-	url := fmt.Sprintf("https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/%s", asset)
-
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
-	if err != nil {
-		return nil, err
+func IsMajorUpgrade(current, latest string) bool {
+	if len(current) == 0 {
+		return false
 	}
 
-	resp, err := net.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
+	getMajorNumber := func(version string) string {
+		return strings.Split(version, ".")[0]
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download installer: %s", url)
-	}
-
-	return resp.Body, nil
+	return getMajorNumber(current) != getMajorNumber(latest)
 }

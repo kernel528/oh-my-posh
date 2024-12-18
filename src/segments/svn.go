@@ -39,11 +39,10 @@ const (
 )
 
 type Svn struct {
-	scm
-
 	Working *SvnStatus
-	BaseRev int
 	Branch  string
+	scm
+	BaseRev int
 }
 
 func (s *Svn) Template() string {
@@ -60,17 +59,22 @@ func (s *Svn) Enabled() bool {
 	return true
 }
 
+func (s *Svn) CacheKey() (string, bool) {
+	dir, err := s.env.HasParentFilePath(".svn", true)
+	if err != nil {
+		return "", false
+	}
+
+	return dir.Path, true
+}
+
 func (s *Svn) shouldDisplay() bool {
 	if !s.hasCommand(SVNCOMMAND) {
 		return false
 	}
 
-	Svndir, err := s.env.HasParentFilePath(".svn")
+	Svndir, err := s.env.HasParentFilePath(".svn", false)
 	if err != nil {
-		return false
-	}
-
-	if s.shouldIgnoreRootRepository(Svndir.ParentFolder) {
 		return false
 	}
 

@@ -23,6 +23,7 @@ func (s *Spotify) Enabled() bool {
 
 	s.Artist = s.runAppleScriptCommand("tell application \"Spotify\" to artist of current track as string")
 	s.Track = s.runAppleScriptCommand("tell application \"Spotify\" to name of current track as string")
+
 	s.resolveIcon()
 
 	return true

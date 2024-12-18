@@ -3,8 +3,8 @@ package segments
 import (
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/alecthomas/assert"
 )
@@ -18,9 +18,9 @@ func TestNodeMatchesVersionFile(t *testing.T) {
 	}
 	cases := []struct {
 		Case            string
-		Expected        bool
 		ExpectedVersion string
 		RCVersion       string
+		Expected        bool
 	}{
 		{Case: "no file context", Expected: true, RCVersion: ""},
 		{Case: "version match", Expected: true, ExpectedVersion: "20.14.0", RCVersion: "20.14.0"},
@@ -37,15 +37,16 @@ func TestNodeMatchesVersionFile(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("FileContent", ".nvmrc").Return(tc.RCVersion)
 
 		node := &Node{
 			language: language{
-				env:     env,
 				version: nodeVersion,
 			},
 		}
+		node.Init(properties.Map{}, env)
+
 		version, match := node.matchesVersionFile()
 		assert.Equal(t, tc.Expected, match, tc.Case)
 		assert.Equal(t, tc.ExpectedVersion, version, tc.Case)
@@ -55,12 +56,12 @@ func TestNodeMatchesVersionFile(t *testing.T) {
 func TestNodeInContext(t *testing.T) {
 	cases := []struct {
 		Case           string
+		ExpectedString string
 		hasPNPM        bool
 		hasYarn        bool
 		hasNPM         bool
 		hasDefault     bool
 		PkgMgrEnabled  bool
-		ExpectedString string
 	}{
 		{Case: "no package manager file", ExpectedString: "", PkgMgrEnabled: true},
 		{Case: "pnpm", hasPNPM: true, ExpectedString: "pnpm", PkgMgrEnabled: true},
@@ -75,22 +76,22 @@ func TestNodeInContext(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("HasFiles", "pnpm-lock.yaml").Return(tc.hasPNPM)
 		env.On("HasFiles", "yarn.lock").Return(tc.hasYarn)
 		env.On("HasFiles", "package-lock.json").Return(tc.hasNPM)
 		env.On("HasFiles", "package.json").Return(tc.hasDefault)
-		node := &Node{
-			language: language{
-				env: env,
-				props: properties.Map{
-					PnpmIcon:            "pnpm",
-					YarnIcon:            "yarn",
-					NPMIcon:             "npm",
-					FetchPackageManager: tc.PkgMgrEnabled,
-				},
-			},
+
+		props := properties.Map{
+			PnpmIcon:            "pnpm",
+			YarnIcon:            "yarn",
+			NPMIcon:             "npm",
+			FetchPackageManager: tc.PkgMgrEnabled,
 		}
+
+		node := &Node{}
+		node.Init(props, env)
+
 		node.loadContext()
 		assert.Equal(t, tc.ExpectedString, node.PackageManagerIcon, tc.Case)
 	}

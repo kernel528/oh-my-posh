@@ -3,10 +3,13 @@ package cli
 import (
 	"fmt"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/ansi"
-	"github.com/jandedobbeleer/oh-my-posh/src/engine"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/image"
+	"github.com/jandedobbeleer/oh-my-posh/src/prompt"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
+	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 
 	"github.com/spf13/cobra"
 )
@@ -47,50 +50,48 @@ Exports the config to an image file ~/mytheme.png.
 Exports the config to an image file using customized output options.`,
 	Args: cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		env := &platform.Shell{
-			CmdFlags: &platform.Flags{
-				Config:        config,
-				Shell:         shell.GENERIC,
-				TerminalWidth: 150,
-			},
+		configFile := config.Path(configFlag)
+		cfg := config.Load(configFile, shell.GENERIC, false)
+
+		flags := &runtime.Flags{
+			Config:        configFile,
+			Shell:         shell.GENERIC,
+			TerminalWidth: 150,
 		}
 
-		env.Init()
-		defer env.Close()
-		cfg := engine.LoadConfig(env)
+		env := &runtime.Terminal{}
+		env.Init(flags)
+
+		template.Init(env, cfg.Var)
+
+		defer func() {
+			template.SaveCache()
+			env.Close()
+		}()
 
 		// set sane defaults for things we don't print
 		cfg.ConsoleTitleTemplate = ""
 		cfg.PWD = ""
-		cfg.OSC99 = false
 
-		// add variables to the environment
-		env.Var = cfg.Var
+		terminal.Init(shell.GENERIC)
+		terminal.BackgroundColor = cfg.TerminalBackground.ResolveTemplate()
+		terminal.Colors = cfg.MakeColors(env)
 
-		writerColors := cfg.MakeColors()
-		writer := &ansi.Writer{
-			TerminalBackground: shell.ConsoleBackgroundColor(env, cfg.TerminalBackground),
-			AnsiColors:         writerColors,
-			TrueColor:          env.CmdFlags.TrueColor,
-		}
-		writer.Init(shell.GENERIC)
-		eng := &engine.Engine{
+		eng := &prompt.Engine{
 			Config: cfg,
 			Env:    env,
-			Writer: writer,
 		}
 
-		prompt := eng.Primary()
+		primaryPrompt := eng.Primary()
 
-		imageCreator := &engine.ImageRenderer{
-			AnsiString: prompt,
+		imageCreator := &image.Renderer{
+			AnsiString: primaryPrompt,
 			Author:     author,
 			BgColor:    bgColor,
-			Ansi:       writer,
 		}
 
 		if outputImage != "" {
-			imageCreator.Path = cleanOutputPath(outputImage, env)
+			imageCreator.Path = cleanOutputPath(outputImage)
 		}
 
 		err := imageCreator.Init(env)

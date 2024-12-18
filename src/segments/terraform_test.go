@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -14,14 +14,14 @@ func TestTerraform(t *testing.T) {
 	cases := []struct {
 		Case              string
 		Template          string
+		WorkspaceName     string
+		ExpectedString    string
 		HasTfCommand      bool
 		HasTfFolder       bool
 		HasTfFiles        bool
 		HasTfVersionFiles bool
 		HasTfStateFile    bool
 		FetchVersion      bool
-		WorkspaceName     string
-		ExpectedString    string
 		ExpectedEnabled   bool
 	}{
 		{
@@ -82,7 +82,7 @@ func TestTerraform(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 
 		env.On("HasCommand", "terraform").Return(tc.HasTfCommand)
 		env.On("HasFolder", ".terraform").Return(tc.HasTfFolder)
@@ -102,12 +102,14 @@ func TestTerraform(t *testing.T) {
 			content, _ := os.ReadFile("../test/terraform.tfstate")
 			env.On("FileContent", "terraform.tfstate").Return(string(content))
 		}
-		tf := &Terraform{
-			env: env,
-			props: properties.Map{
-				properties.FetchVersion: tc.FetchVersion,
-			},
+
+		props := properties.Map{
+			properties.FetchVersion: tc.FetchVersion,
 		}
+
+		tf := &Terraform{}
+		tf.Init(props, env)
+
 		template := tc.Template
 		if len(template) == 0 {
 			template = tf.Template()

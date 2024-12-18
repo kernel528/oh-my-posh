@@ -3,12 +3,13 @@ package properties
 import (
 	"testing"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/color"
 	"github.com/stretchr/testify/assert"
 )
 
 const (
 	expected      = "expected"
-	expectedColor = "#768954"
+	expectedColor = color.Ansi("#768954")
 
 	Foo Property = "color"
 )
@@ -39,7 +40,7 @@ func TestGetHexColor(t *testing.T) {
 }
 
 func TestGetColor(t *testing.T) {
-	expected := "yellow"
+	expected := color.Ansi("yellow")
 	var properties = Map{Foo: expected}
 	value := properties.GetColor(Foo, "#789123")
 	assert.Equal(t, expected, value)
@@ -60,7 +61,7 @@ func TestDefaultColorWithUnavailableProperty(t *testing.T) {
 }
 
 func TestGetPaletteColor(t *testing.T) {
-	expected := "p:red"
+	expected := color.Ansi("p:red")
 	var properties = Map{Foo: expected}
 	value := properties.GetColor(Foo, "white")
 	assert.Equal(t, expected, value)
@@ -87,9 +88,9 @@ func TestGetBoolInvalidProperty(t *testing.T) {
 
 func TestGetFloat64(t *testing.T) {
 	cases := []struct {
+		Input    any
 		Case     string
 		Expected float64
-		Input    any
 	}{
 		{Case: "int", Expected: 1337, Input: 1337},
 		{Case: "float64", Expected: 1337, Input: float64(1337)},
@@ -114,11 +115,11 @@ func TestGetFloat64PropertyNotInMap(t *testing.T) {
 
 func TestOneOf(t *testing.T) {
 	cases := []struct {
-		Case         string
-		Map          Map
-		Properties   []Property
-		DefaultValue string
 		Expected     any
+		Map          Map
+		Case         string
+		DefaultValue string
+		Properties   []Property
 	}{
 		{
 			Case:       "one element",

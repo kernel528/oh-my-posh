@@ -3,6 +3,7 @@
 install_dir=""
 themes_dir=""
 executable=""
+version=""
 
 error() {
     printf "\e[31m$1\e[0m\n"
@@ -21,15 +22,16 @@ help() {
     # Display Help
     echo "Install script for Oh My Posh"
     echo
-    echo "Syntax: install.sh [-h|d|t]"
+    echo "Syntax: install.sh [-h] [-d <dir>] [-t <dir>] [-v <ver>]"
     echo "options:"
     echo "-h     Print this help."
-    echo "-d     Specify the installation directory. Defaults to /usr/local/bin or the directory where oh-my-posh is installed."
+    echo "-d     Specify the installation directory. Defaults to $HOME/bin, $HOME/.local/bin or the directory where oh-my-posh is installed."
     echo "-t     Specify the themes installation directory. Defaults to the oh-my-posh cache directory."
+    echo "-v     Version to download, defaults to latest"
     echo
 }
 
-while getopts ":hd:t:" option; do
+while getopts ":hd:t:v:" option; do
    case $option in
       h) # display Help
          help
@@ -38,6 +40,8 @@ while getopts ":hd:t:" option; do
          install_dir=${OPTARG};;
       t) # themes directory
          themes_dir=${OPTARG};;
+      v) # version
+         version=${OPTARG};;
      \?) # Invalid option
          echo "Invalid option command line option. Use -h for help."
          exit 1
@@ -74,9 +78,22 @@ set_install_directory() {
         install_dir=$(dirname $real_dir)
         info "Oh My Posh is already installed, updating existing installation in:"
         info "  ${install_dir}"
-    else
-        install_dir="/usr/local/bin"
+        return 0
     fi
+
+    # check if $HOME/bin exists and is writable
+    if [ -d "$HOME/bin" ] && [ -w "$HOME/bin" ]; then
+        install_dir="$HOME/bin"
+        return 0
+    fi
+
+    # check if $HOME/.local/bin exists and is writable
+    if ([ -d "$HOME/.local/bin" ] && [ -w "$HOME/.local/bin" ]) || mkdir -p "$HOME/.local/bin"; then
+        install_dir="$HOME/.local/bin"
+        return 0
+    fi
+
+    error "Cannot determine installation directory. Please specify a directory and try again: \ncurl -s https://ohmyposh.dev/install.sh | bash -s -- -d {directory}"
 }
 
 validate_install_directory() {
@@ -84,7 +101,7 @@ validate_install_directory() {
     if [ ! -d "$install_dir" ]; then
         error "Directory ${install_dir} does not exist, set a different directory and try again."
     fi
-        
+
     # Check if regular user has write permission
     if [ ! -w "$install_dir" ]; then
         error "Cannot write to ${install_dir}. Please check write permissions or set a different directory and try again: \ncurl -s https://ohmyposh.dev/install.sh | bash -s -- -d {directory}"
@@ -102,12 +119,12 @@ validate_install_directory() {
     )
 
     if [ "${good}" != "1" ]; then
-        warn "Installation directory ${install_dir} is not in your \$PATH"
+        warn "Installation directory ${install_dir} is not in your \$PATH, add it using \nexport PATH=\$PATH:${install_dir}"
     fi
 }
 
 validate_themes_directory() {
-    
+
     # Validate if the themes directory exists
     if ! mkdir -p "$themes_dir" > /dev/null 2>&1; then
         error "Cannot write to ${themes_dir}. Please check write permissions or set a different directory and try again: \ncurl -s https://ohmyposh.dev/install.sh | bash -s -- -t {directory}"
@@ -138,7 +155,7 @@ install_themes() {
 
     zip_file="${cache_dir}/themes.zip"
 
-    url="https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip"
+    url="https://cdn.ohmyposh.dev/releases/latest/themes.zip"
 
     http_response=$(curl -s -f -L $url -o $zip_file -w "%{http_code}")
 
@@ -174,7 +191,10 @@ install() {
     info "\nℹ️  Installing oh-my-posh for ${target} in ${install_dir}"
 
     executable=${install_dir}/oh-my-posh
-    url=https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/posh-${target}
+    url=https://cdn.ohmyposh.dev/releases/latest/posh-${target}
+    if [ "$version" ]; then
+      url=https://cdn.ohmyposh.dev/releases/${version}/posh-${target}
+    fi
 
     info "⬇️  Downloading oh-my-posh from ${url}"
 

@@ -13,11 +13,15 @@ builds:
     flags:
       - -a
     ldflags:
-      - -s -w -X github.com/jandedobbeleer/oh-my-posh/src/build.Version={{ .Version }} -X github.com/jandedobbeleer/oh-my-posh/src/build.Date={{ .Date }} -extldflags "-static"
+      - -s -w
+      - -X github.com/jandedobbeleer/oh-my-posh/src/build.Version={{ .Version }}
+      - -X github.com/jandedobbeleer/oh-my-posh/src/build.Date={{ .Date }}
+      - -extldflags "-static"
     tags:
       - netgo
       - osusergo
       - static_build
+      - timetzdata
     env:
       - CGO_ENABLED=0
     goos:
@@ -39,12 +43,18 @@ builds:
         goarch: arm
     hooks:
       post:
-      - sh -c "cosign sign-blob --key $COSIGN_KEY_LOCATION {{ .Path }} > dist/{{ .Name }}.sig"
+        - pwsh -c "if ('{{ .Path }}'.EndsWith('.exe')) { & '{{ .Env.SIGNTOOL }}' sign /v /debug /fd SHA256 /tr 'http://timestamp.acs.microsoft.com' /td SHA256 /dlib '{{ .Env.SIGNTOOLDLIB }}' /dmdf './metadata.json' '{{ .Path }}' }"
 archives:
   - id: oh-my-posh
     format: binary
     name_template: "posh-{{ .Os }}-{{ .Arch }}"
 checksum:
   name_template: 'checksums.txt'
+signs:
+  - cmd: pwsh
+    args:
+      - "-c"
+      - "& '{{ .Env.OPENSSL }}' pkeyutl -sign -inkey '{{ .Env.SHA_SIGNING_KEY_LOCATION }}' -out '${artifact}.sig' -rawin -in '${artifact}'"
+    artifacts: checksum
 changelog:
   disable: true

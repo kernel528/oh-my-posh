@@ -2,10 +2,14 @@ package cli
 
 import (
 	"fmt"
-	"runtime"
+	"os"
+	stdruntime "runtime"
+	"slices"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/engine"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 	"github.com/jandedobbeleer/oh-my-posh/src/upgrade"
 	"github.com/spf13/cobra"
 )
@@ -19,33 +23,67 @@ var upgradeCmd = &cobra.Command{
 	Long:  "Upgrade when a new version is available.",
 	Args:  cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		if runtime.GOOS == platform.LINUX {
-			fmt.Print("\n⚠️ upgrade is not supported on this platform\n\n")
+		supportedPlatforms := []string{
+			runtime.WINDOWS,
+			runtime.DARWIN,
+			runtime.LINUX,
+		}
+
+		if !slices.Contains(supportedPlatforms, stdruntime.GOOS) {
 			return
 		}
 
-		env := &platform.Shell{
-			CmdFlags: &platform.Flags{},
-		}
-		env.Init()
+		sh := os.Getenv("POSH_SHELL")
+
+		env := &runtime.Terminal{}
+		env.Init(nil)
 		defer env.Close()
 
+		terminal.Init(sh)
+		fmt.Print(terminal.StartProgress())
+
+		configFile := config.Path(configFlag)
+		cfg := config.Load(configFile, sh, false)
+		cfg.Upgrade.Cache = env.Cache()
+
+		latest, err := cfg.Upgrade.Latest()
+		if err != nil {
+			fmt.Printf("\n❌ %s\n\n%s", err, terminal.StopProgress())
+			os.Exit(1)
+			return
+		}
+
+		cfg.Upgrade.Version = fmt.Sprintf("v%s", latest)
+
 		if force {
-			upgrade.Run(env)
+			executeUpgrade(cfg.Upgrade)
 			return
 		}
 
-		cfg := engine.LoadConfig(env)
-
-		if _, hasNotice := upgrade.Notice(env, true); !hasNotice {
-			if !cfg.DisableNotice {
-				fmt.Print("\n✅  no new version available\n\n")
-			}
+		if upgrade.IsMajorUpgrade(build.Version, latest) {
+			message := terminal.StopProgress()
+			message += fmt.Sprintf("\n🚨 major upgrade available: v%s -> v%s, use oh-my-posh upgrade --force to upgrade\n\n", build.Version, latest)
+			fmt.Print(message)
 			return
 		}
 
-		upgrade.Run(env)
+		if build.Version != latest {
+			executeUpgrade(cfg.Upgrade)
+			return
+		}
+
+		fmt.Print(terminal.StopProgress())
 	},
+}
+
+func executeUpgrade(cfg *upgrade.Config) {
+	err := upgrade.Run(cfg)
+	fmt.Print(terminal.StopProgress())
+	if err == nil {
+		return
+	}
+
+	os.Exit(1)
 }
 
 func init() {

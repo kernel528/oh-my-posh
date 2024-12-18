@@ -5,7 +5,7 @@ module.exports = {
   tagline: 'A prompt theme engine for any shell.',
   url: 'https://ohmyposh.dev',
   baseUrl: '/',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicons.svg',
   organizationName: 'jandedobbeleer',
   projectName: 'oh-my-posh',
   onBrokenLinks: 'ignore',
@@ -18,6 +18,11 @@ module.exports = {
     "https://fonts.googleapis.com/css2?family=Fira+Code&display=swap"
   ],
   themeConfig: {
+    colorMode: {
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
+    },
     prism: {
       additionalLanguages: ['powershell', 'lua', 'jsstacktrace', 'toml', 'json', 'yaml'],
     },
@@ -25,7 +30,8 @@ module.exports = {
       title: 'Oh My Posh',
       logo: {
         alt: 'Oh My Posh Logo',
-        src: 'img/logo.svg',
+        src: 'img/logo-dark.svg',
+        srcDark: 'img/logo-light.svg',
       },
       items: [
         {
@@ -42,6 +48,11 @@ module.exports = {
         {
           href: 'https://github.com/sponsors/JanDeDobbeleer',
           label: 'Sponsor',
+          position: 'left',
+        },
+        {
+          href: 'https://polar.sh/oh-my-posh',
+          label: 'Buy',
           position: 'left',
         },
         {
@@ -116,6 +127,10 @@ module.exports = {
               href: 'https://github.com/sponsors/JanDeDobbeleer',
             },
             {
+              label: 'Buy',
+              href: 'https://polar.sh/oh-my-posh',
+            },
+            {
               label: 'GitKraken',
               href: 'https://www.gitkraken.com/invite/nQmDPR9D',
             },
@@ -162,6 +177,9 @@ module.exports = {
             require.resolve('./src/css/prism-rose-pine-moon.css'),
             require.resolve('./src/css/custom.css')
           ],
+        },
+        blog: {
+          onInlineAuthors: 'ignore'
         },
       },
     ],

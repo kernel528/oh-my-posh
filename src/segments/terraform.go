@@ -5,7 +5,6 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -13,20 +12,14 @@ import (
 )
 
 type Terraform struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
-	WorkspaceName string
 	TerraformBlock
+	WorkspaceName string
 }
 
 func (tf *Terraform) Template() string {
 	return " {{ .WorkspaceName }}{{ if .Version }} {{ .Version }}{{ end }} "
-}
-
-func (tf *Terraform) Init(props properties.Properties, env platform.Environment) {
-	tf.props = props
-	tf.env = env
 }
 
 type TerraFormConfig struct {

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -16,8 +16,8 @@ func TestSpotifyWsl(t *testing.T) {
 	cases := []struct {
 		Case            string
 		ExpectedString  string
-		ExpectedEnabled bool
 		ExecOutput      string
+		ExpectedEnabled bool
 	}{
 		{
 			Case:            "Spotify not running",
@@ -66,13 +66,13 @@ func TestSpotifyWsl(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("IsWsl").Return(true)
 		env.On("RunCommand", "tasklist.exe", []string{"/V", "/FI", "Imagename eq Spotify.exe", "/FO", "CSV", "/NH"}).Return(tc.ExecOutput, nil)
-		s := &Spotify{
-			env:   env,
-			props: properties.Map{},
-		}
+
+		s := &Spotify{}
+		s.Init(properties.Map{}, env)
+
 		assert.Equal(t, tc.ExpectedEnabled, s.Enabled(), fmt.Sprintf("Failed in case: %s", tc.Case))
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, s.Template(), s), fmt.Sprintf("Failed in case: %s", tc.Case))
 	}

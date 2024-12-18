@@ -4,17 +4,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
+	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 func TestTalosctlSegment(t *testing.T) {
 	cases := []struct {
 		Case            string
 		ActiveConfig    string
-		ExpectedEnabled bool
 		ExpectedString  string
+		ExpectedEnabled bool
 	}{
 		{
 			Case:            "happy path",
@@ -39,14 +39,14 @@ func TestTalosctlSegment(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("Home").Return("home")
 		fcPath := filepath.Join("home", ".talos", "config")
 		env.On("FileContent", fcPath).Return(tc.ActiveConfig)
-		env.On("Error", mock2.Anything).Return()
-		talos := TalosCTL{
-			env: env,
-		}
+
+		talos := TalosCTL{}
+		talos.Init(properties.Map{}, env)
+
 		talos.Enabled()
 		assert.Equal(t, tc.ExpectedEnabled, talos.Enabled())
 		if tc.ExpectedEnabled {
@@ -75,15 +75,15 @@ func TestGetTalosctlActiveConfig(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("Home").Return("home")
 		configPath := filepath.Join("home", ".talos")
 		contentPath := filepath.Join(configPath, "config")
 		env.On("FileContent", contentPath).Return(tc.ActiveConfig)
-		env.On("Error", mock2.Anything).Return()
-		talos := TalosCTL{
-			env: env,
-		}
+
+		talos := TalosCTL{}
+		talos.Init(properties.Map{}, env)
+
 		got, err := talos.getActiveConfig(configPath)
 		assert.Equal(t, tc.ExpectedString, got, tc.Case)
 		if len(tc.ExpectedError) > 0 {

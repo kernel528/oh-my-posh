@@ -1,13 +1,12 @@
 package segments
 
 import (
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 )
 
 type Os struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	Icon string
 }
@@ -30,11 +29,11 @@ func (oi *Os) Template() string {
 func (oi *Os) Enabled() bool {
 	goos := oi.env.GOOS()
 	switch goos {
-	case platform.WINDOWS:
+	case runtime.WINDOWS:
 		oi.Icon = oi.props.GetString(Windows, "\uE62A")
-	case platform.DARWIN:
+	case runtime.DARWIN:
 		oi.Icon = oi.props.GetString(MacOS, "\uF179")
-	case platform.LINUX:
+	case runtime.LINUX:
 		pf := oi.env.Platform()
 		displayDistroName := oi.props.GetBool(DisplayDistroName, false)
 		if displayDistroName {
@@ -90,9 +89,4 @@ func (oi *Os) getDistroIcon(distro string) string {
 	}
 
 	return oi.props.GetString(Linux, "\uF17C")
-}
-
-func (oi *Os) Init(props properties.Properties, env platform.Environment) {
-	oi.props = props
-	oi.env = env
 }

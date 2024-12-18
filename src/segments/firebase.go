@@ -6,8 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 )
 
 const (
@@ -15,8 +14,7 @@ const (
 )
 
 type Firebase struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	Project string
 }
@@ -29,22 +27,17 @@ func (f *Firebase) Template() string {
 	return " {{ .Project}} "
 }
 
-func (f *Firebase) Init(props properties.Properties, env platform.Environment) {
-	f.props = props
-	f.env = env
-}
-
 func (f *Firebase) Enabled() bool {
 	cfgDir := filepath.Join(f.env.Home(), ".config", "configstore")
 	configFile, err := f.getActiveConfig(cfgDir)
 	if err != nil {
-		f.env.Error(err)
+		log.Error(err)
 		return false
 	}
 
 	data, err := f.getFirebaseData(configFile)
 	if err != nil {
-		f.env.Error(err)
+		log.Error(err)
 		return false
 	}
 

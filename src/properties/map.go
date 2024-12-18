@@ -3,12 +3,12 @@ package properties
 import (
 	"fmt"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/ansi"
+	"github.com/jandedobbeleer/oh-my-posh/src/color"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 )
 
 type Properties interface {
-	GetColor(property Property, defaultColor string) string
+	GetColor(property Property, defaultValue color.Ansi) color.Ansi
 	GetBool(property Property, defaultValue bool) bool
 	GetString(property Property, defaultValue string) string
 	GetFloat64(property Property, defaultValue float64) float64
@@ -25,12 +25,6 @@ type Property string
 const (
 	// Style indicates the style to use
 	Style Property = "style"
-	// IncludeFolders indicates folders to be included for the segment logic
-	IncludeFolders Property = "include_folders"
-	// ExcludeFolders indicates folders to be excluded for the segment logic
-	ExcludeFolders Property = "exclude_folders"
-	// IgnoreFolders is a duplicate of ExcludeFolders
-	IgnoreFolders Property = "ignore_folders"
 	// FetchVersion decides whether to fetch the version number or not
 	FetchVersion Property = "fetch_version"
 	// AlwaysEnabled decides whether or not to always display the info
@@ -49,10 +43,10 @@ const (
 	HTTPTimeout Property = "http_timeout"
 	// DefaultHTTPTimeout default timeout used when executing http request
 	DefaultHTTPTimeout = 20
-	// DefaultCacheTimeout default timeout used when caching data
-	DefaultCacheTimeout = 10
-	// CacheTimeout cache timeout
-	CacheTimeout Property = "cache_timeout"
+	// Files to trigger the segment on
+	Files Property = "files"
+	// Duration of the cache
+	CacheDuration Property = "cache_duration"
 )
 
 type Map map[Property]any
@@ -65,19 +59,22 @@ func (m Map) GetString(property Property, defaultValue string) string {
 	return fmt.Sprint(val)
 }
 
-func (m Map) GetColor(property Property, defaultValue string) string {
+func (m Map) GetColor(property Property, defaultValue color.Ansi) color.Ansi {
 	val, found := m[property]
 	if !found {
 		return defaultValue
 	}
-	colorString := fmt.Sprint(val)
-	if ansi.IsAnsiColorName(colorString) {
+
+	colorString := color.Ansi(fmt.Sprint(val))
+	if color.IsAnsiColorName(colorString) {
 		return colorString
 	}
-	values := regex.FindNamedRegexMatch(`(?P<color>#[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3}|p:.*)`, colorString)
+
+	values := regex.FindNamedRegexMatch(`(?P<color>#[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3}|p:.*)`, colorString.String())
 	if values != nil && values["color"] != "" {
-		return values["color"]
+		return color.Ansi(values["color"])
 	}
+
 	return defaultValue
 }
 

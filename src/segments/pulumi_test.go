@@ -2,37 +2,33 @@ package segments
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 func TestPulumi(t *testing.T) {
 	cases := []struct {
-		Case       string
-		YAMLConfig string
-		JSONConfig string
-
-		HasCommand bool
-
-		FetchStack bool
-		Stack      string
-		StackError error
-
-		HasWorkspaceFolder bool
+		StackError         error
+		AboutError         error
+		About              string
+		YAMLConfig         string
+		JSONConfig         string
+		Case               string
+		ExpectedString     string
+		Stack              string
+		AboutCache         string
 		WorkSpaceFile      string
-
-		FetchAbout bool
-		About      string
-		AboutError error
-		AboutCache string
-
-		ExpectedString  string
-		ExpectedEnabled bool
+		HasCommand         bool
+		FetchAbout         bool
+		HasWorkspaceFolder bool
+		FetchStack         bool
+		ExpectedEnabled    bool
 	}{
 		{
 			Case:            "no pulumi command",
@@ -94,18 +90,6 @@ description: A Console App
 			WorkSpaceFile:      `{ "stack": "1337" }`,
 			About:              `{ "backend": { "url": "s3://test-pulumi-state-test", "user":"posh-user" } }`,
 		},
-		{
-			Case:               "pulumi URL - cache",
-			ExpectedString:     "\U000f0d46 1337 :: posh-user@s3://test-pulumi-state-test",
-			ExpectedEnabled:    true,
-			HasCommand:         true,
-			HasWorkspaceFolder: true,
-			FetchStack:         true,
-			FetchAbout:         true,
-			JSONConfig:         `{ "name": "oh-my-posh" }`,
-			WorkSpaceFile:      `{ "stack": "1337" }`,
-			AboutCache:         `{ "url": "s3://test-pulumi-state-test", "user":"posh-user" }`,
-		},
 		// Error flows
 		{
 			Case:            "pulumi file JSON error",
@@ -132,19 +116,6 @@ description: A Console App
 			HasCommand:      true,
 			FetchAbout:      true,
 			JSONConfig:      `{ "name": "oh-my-posh" }`,
-		},
-		{
-			Case:               "pulumi URL - cache error",
-			ExpectedString:     "\U000f0d46 1337 :: posh-user@s3://test-pulumi-state-test-output",
-			ExpectedEnabled:    true,
-			HasCommand:         true,
-			HasWorkspaceFolder: true,
-			FetchStack:         true,
-			FetchAbout:         true,
-			JSONConfig:         `{ "name": "oh-my-posh" }`,
-			WorkSpaceFile:      `{ "stack": "1337" }`,
-			AboutCache:         `{`,
-			About:              `{ "backend": { "url": "s3://test-pulumi-state-test-output", "user":"posh-user" } }`,
 		},
 		{
 			Case:               "pulumi URL - about error",
@@ -185,17 +156,15 @@ description: A Console App
 	}
 
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 
 		env.On("HasCommand", "pulumi").Return(tc.HasCommand)
 		env.On("RunCommand", "pulumi", []string{"stack", "ls", "--json"}).Return(tc.Stack, tc.StackError)
 		env.On("RunCommand", "pulumi", []string{"about", "--json"}).Return(tc.About, tc.AboutError)
 
-		env.On("Pwd").Return("/home/foobar/Work/oh-my-posh/pulumi/projects/awesome-project")
+		pwd := "/home/foobar/Work/oh-my-posh/pulumi/projects/awesome-project"
+		env.On("Pwd").Return(pwd)
 		env.On("Home").Return(filepath.Clean("/home/foobar"))
-		env.On("Error", mock2.Anything)
-		env.On("Debug", mock2.Anything)
-		env.On("DebugF", mock2.Anything, mock2.Anything)
 
 		env.On("HasFiles", pulumiYAML).Return(len(tc.YAMLConfig) > 0)
 		env.On("FileContent", pulumiYAML).Return(tc.YAMLConfig, nil)
@@ -203,26 +172,30 @@ description: A Console App
 		env.On("HasFiles", pulumiJSON).Return(len(tc.JSONConfig) > 0)
 		env.On("FileContent", pulumiJSON).Return(tc.JSONConfig, nil)
 
-		env.On("PathSeparator").Return("/")
-
 		env.On("HasFolder", filepath.Clean("/home/foobar/.pulumi/workspaces")).Return(tc.HasWorkspaceFolder)
-		workspaceFile := "oh-my-posh-c62b7b6786c5c5a85896576e46a25d7c9f888e92-workspace.json"
+
+		pulumi := &Pulumi{}
+
+		var fileName string
+		if len(tc.JSONConfig) > 0 {
+			fileName = pulumiJSON
+		} else {
+			fileName = pulumiYAML
+		}
+
+		sha1 := pulumi.sha1HexString(pwd + path.Separator() + fileName)
+		workspaceFile := fmt.Sprintf("oh-my-posh-%s-workspace.json", sha1)
+
 		env.On("HasFilesInDir", filepath.Clean("/home/foobar/.pulumi/workspaces"), workspaceFile).Return(len(tc.WorkSpaceFile) > 0)
+
 		env.On("FileContent", filepath.Clean("/home/foobar/.pulumi/workspaces/"+workspaceFile)).Return(tc.WorkSpaceFile, nil)
 
-		cache := &mock.MockedCache{}
-		cache.On("Get", "pulumi-oh-my-posh-1337-c62b7b6786c5c5a85896576e46a25d7c9f888e92-about").Return(tc.AboutCache, len(tc.AboutCache) > 0)
-		cache.On("Set", mock2.Anything, mock2.Anything, mock2.Anything)
-
-		env.On("Cache").Return(cache)
-
-		pulumi := &Pulumi{
-			env: env,
-			props: properties.Map{
-				FetchStack: tc.FetchStack,
-				FetchAbout: tc.FetchAbout,
-			},
+		props := properties.Map{
+			FetchStack: tc.FetchStack,
+			FetchAbout: tc.FetchAbout,
 		}
+
+		pulumi.Init(props, env)
 
 		assert.Equal(t, tc.ExpectedEnabled, pulumi.Enabled(), tc.Case)
 

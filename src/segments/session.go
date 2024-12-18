@@ -1,20 +1,15 @@
 package segments
 
 import (
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 )
 
 type Session struct {
-	props properties.Properties
-	env   platform.Environment
-	// text  string
+	base
 
-	SSHSession bool
-
-	// Deprecated
 	DefaultUserName string
+	SSHSession      bool
 }
 
 func (s *Session) Enabled() bool {
@@ -24,11 +19,6 @@ func (s *Session) Enabled() bool {
 
 func (s *Session) Template() string {
 	return " {{ if .SSHSession }}\ueba9 {{ end }}{{ .UserName }}@{{ .HostName }} "
-}
-
-func (s *Session) Init(props properties.Properties, env platform.Environment) {
-	s.props = props
-	s.env = env
 }
 
 func (s *Session) activeSSHSession() bool {
@@ -44,7 +34,7 @@ func (s *Session) activeSSHSession() bool {
 		}
 	}
 
-	if s.env.Platform() == platform.WINDOWS {
+	if s.env.Platform() == runtime.WINDOWS {
 		return false
 	}
 

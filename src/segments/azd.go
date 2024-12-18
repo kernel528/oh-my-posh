@@ -5,29 +5,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 )
 
 type Azd struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	azdConfig
 }
 
 type azdConfig struct {
-	Version            int    `json:"version"`
 	DefaultEnvironment string `json:"defaultEnvironment"`
+	Version            int    `json:"version"`
 }
 
 func (t *Azd) Template() string {
 	return " \uebd8 {{ .DefaultEnvironment }} "
-}
-
-func (t *Azd) Init(props properties.Properties, env platform.Environment) {
-	t.props = props
-	t.env = env
 }
 
 func (t *Azd) Enabled() bool {
@@ -35,14 +28,14 @@ func (t *Azd) Enabled() bool {
 
 	folders := t.props.GetStringArray(LanguageFolders, []string{".azure"})
 	for _, folder := range folders {
-		if file, err := t.env.HasParentFilePath(folder); err == nil {
+		if file, err := t.env.HasParentFilePath(folder, false); err == nil {
 			parentFilePath = file.ParentFolder
 			break
 		}
 	}
 
 	if len(parentFilePath) == 0 {
-		t.env.Debug("No .azure folder found in parent directories")
+		log.Debug("no .azure folder found in parent directories")
 		return false
 	}
 

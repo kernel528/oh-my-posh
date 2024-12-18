@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 )
 
 type Node struct {
-	language
-
 	PackageManagerIcon string
+	language
 }
 
 const (
@@ -30,25 +28,19 @@ func (n *Node) Template() string {
 	return " {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }} "
 }
 
-func (n *Node) Init(props properties.Properties, env platform.Environment) {
-	n.language = language{
-		env:        env,
-		props:      props,
-		extensions: []string{"*.js", "*.ts", "package.json", ".nvmrc", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".vue"},
-		commands: []*cmd{
-			{
-				executable: "node",
-				args:       []string{"--version"},
-				regex:      `(?:v(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
-			},
-		},
-		versionURLTemplate: "https://github.com/nodejs/node/blob/master/doc/changelogs/CHANGELOG_V{{ .Major }}.md#{{ .Full }}",
-		matchesVersionFile: n.matchesVersionFile,
-		loadContext:        n.loadContext,
-	}
-}
-
 func (n *Node) Enabled() bool {
+	n.extensions = []string{"*.js", "*.ts", "package.json", ".nvmrc", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".vue"}
+	n.commands = []*cmd{
+		{
+			executable: "node",
+			args:       []string{"--version"},
+			regex:      `(?:v(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
+		},
+	}
+	n.versionURLTemplate = "https://github.com/nodejs/node/blob/master/doc/changelogs/CHANGELOG_V{{ .Major }}.md#{{ .Full }}"
+	n.language.matchesVersionFile = n.matchesVersionFile
+	n.language.loadContext = n.loadContext
+
 	return n.language.Enabled()
 }
 

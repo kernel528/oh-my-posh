@@ -4,14 +4,12 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"gopkg.in/yaml.v3"
 )
 
 type TalosCTL struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	Context string `yaml:"context"`
 }
@@ -20,22 +18,17 @@ func (t *TalosCTL) Template() string {
 	return " {{ .Context}} "
 }
 
-func (t *TalosCTL) Init(props properties.Properties, env platform.Environment) {
-	t.props = props
-	t.env = env
-}
-
 func (t *TalosCTL) Enabled() bool {
 	cfgDir := filepath.Join(t.env.Home(), ".talos")
 	configFile, err := t.getActiveConfig(cfgDir)
 	if err != nil {
-		t.env.Error(err)
+		log.Error(err)
 		return false
 	}
 
 	err = yaml.Unmarshal([]byte(configFile), t)
 	if err != nil {
-		t.env.Error(err)
+		log.Error(err)
 		return false
 	}
 

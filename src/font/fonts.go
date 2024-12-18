@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
+	httplib "net/http"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform/net"
+	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/http"
+)
+
+const (
+	CascadiaCodeMS = "CascadiaCode (MS)"
 )
 
 type release struct {
@@ -26,24 +31,69 @@ type Asset struct {
 func (a Asset) FilterValue() string { return a.Name }
 
 func Fonts() ([]*Asset, error) {
+	if assets, err := getCachedFontData(); err == nil {
+		return assets, nil
+	}
+
 	assets, err := fetchFontAssets("ryanoasis/nerd-fonts")
 	if err != nil {
 		return nil, err
 	}
 
-	cascadiaCode, err := fetchFontAssets("microsoft/cascadia-code")
-	if err != nil {
-		return assets, nil
+	cascadiaCode, err := CascadiaCode()
+	if err == nil {
+		assets = append(assets, cascadiaCode)
 	}
 
-	assets = append(assets, cascadiaCode...)
 	sort.Slice(assets, func(i, j int) bool { return assets[i].Name < assets[j].Name })
+
+	setCachedFontData(assets)
 
 	return assets, nil
 }
 
-func CascadiaCode() ([]*Asset, error) {
-	return fetchFontAssets("microsoft/cascadia-code")
+func getCachedFontData() ([]*Asset, error) {
+	if cache == nil {
+		return nil, errors.New("environment not set")
+	}
+
+	list, OK := cache.Get(cache_.FONTLISTCACHE)
+	if !OK {
+		return nil, errors.New("cache not found")
+	}
+
+	assets := make([]*Asset, 0)
+	err := json.Unmarshal([]byte(list), &assets)
+	if err != nil {
+		return nil, err
+	}
+
+	return assets, nil
+}
+
+func setCachedFontData(assets []*Asset) {
+	if cache == nil {
+		return
+	}
+
+	data, err := json.Marshal(assets)
+	if err != nil {
+		return
+	}
+
+	cache.Set(cache_.FONTLISTCACHE, string(data), cache_.ONEDAY)
+}
+
+func CascadiaCode() (*Asset, error) {
+	assets, err := fetchFontAssets("microsoft/cascadia-code")
+	if err != nil || len(assets) != 1 {
+		return nil, errors.New("no assets found")
+	}
+
+	// patch the name
+	assets[0].Name = CascadiaCodeMS
+
+	return assets[0], nil
 }
 
 func fetchFontAssets(repo string) ([]*Asset, error) {
@@ -51,14 +101,14 @@ func fetchFontAssets(repo string) ([]*Asset, error) {
 	defer cancelF()
 
 	repoURL := "https://api.github.com/repos/" + repo + "/releases/latest"
-	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
+	req, err := httplib.NewRequestWithContext(ctx, "GET", repoURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("Accept", "application/vnd.github.v3+json")
-	response, err := net.HTTPClient.Do(req)
-	if err != nil || response.StatusCode != http.StatusOK {
+	response, err := http.HTTPClient.Do(req)
+	if err != nil || response.StatusCode != httplib.StatusOK {
 		return nil, fmt.Errorf("failed to get %s release", repo)
 	}
 

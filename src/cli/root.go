@@ -10,8 +10,15 @@ import (
 )
 
 var (
-	config         string
-	displayVersion bool
+	configFlag   string
+	shellName    string
+	printVersion bool
+
+	// for internal use only
+	silent bool
+
+	// deprecated
+	initialize bool
 )
 
 var RootCmd = &cobra.Command{
@@ -26,10 +33,11 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 			runInit(strings.ToLower(shellName))
 			return
 		}
-		if displayVersion {
+		if printVersion {
 			fmt.Println(build.Version)
 			return
 		}
+
 		_ = cmd.Help()
 	},
 }
@@ -41,15 +49,15 @@ func Execute() {
 	}
 }
 
-// Backwards compatibility
-var (
-	shellName  string
-	initialize bool
-)
-
 func init() {
-	RootCmd.PersistentFlags().StringVarP(&config, "config", "c", "", "config file path")
-	RootCmd.Flags().BoolVarP(&initialize, "init", "i", false, "init (deprecated)")
-	RootCmd.Flags().BoolVar(&displayVersion, "version", false, "version")
-	RootCmd.Flags().StringVarP(&shellName, "shell", "s", "", "shell (deprecated)")
+	RootCmd.PersistentFlags().StringVarP(&configFlag, "config", "c", "", "config file path")
+	RootCmd.PersistentFlags().BoolVar(&silent, "silent", false, "do not print anything")
+	RootCmd.Flags().BoolVar(&printVersion, "version", false, "print the version number and exit")
+
+	// Deprecated flags, should be kept to avoid breaking CLI integration.
+	RootCmd.Flags().BoolVarP(&initialize, "init", "i", false, "init")
+	RootCmd.Flags().StringVarP(&shellName, "shell", "s", "", "shell")
+
+	// Hide flags that are deprecated or for internal use only.
+	_ = RootCmd.PersistentFlags().MarkHidden("silent")
 }

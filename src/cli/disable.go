@@ -10,7 +10,7 @@ import (
 var disableCmd = &cobra.Command{
 	Use:       fmt.Sprintf(toggleUse, "disable"),
 	Short:     "Disable a feature",
-	Long:      fmt.Sprintf(toggleLong, "Disable", "disable"),
+	Long:      fmt.Sprintf(toggleLong, "Disable"),
 	ValidArgs: toggleArgs,
 	Args:      NoArgsOrOneValidArg,
 	Run: func(cmd *cobra.Command, args []string) {

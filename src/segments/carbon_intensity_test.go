@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 const (
@@ -19,14 +19,14 @@ const (
 func TestCarbonIntensitySegmentSingle(t *testing.T) {
 	cases := []struct {
 		Case            string
-		HasError        bool
-		HasData         bool
-		Actual          int
-		Forecast        int
 		Index           string
 		ExpectedString  string
-		ExpectedEnabled bool
 		Template        string
+		Actual          int
+		Forecast        int
+		HasError        bool
+		HasData         bool
+		ExpectedEnabled bool
 	}{
 		{
 			Case:            "Very Low, Going Down",
@@ -201,10 +201,9 @@ func TestCarbonIntensitySegmentSingle(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		env := &mock.MockedEnvironment{}
+		env := &mock.Environment{}
 		var props = properties.Map{
-			properties.HTTPTimeout:  5000,
-			properties.CacheTimeout: 0,
+			properties.HTTPTimeout: 5000,
 		}
 
 		jsonResponse := fmt.Sprintf(
@@ -226,12 +225,10 @@ func TestCarbonIntensitySegmentSingle(t *testing.T) {
 		}
 
 		env.On("HTTPRequest", CARBONINTENSITYURL).Return([]byte(jsonResponse), responseError)
-		env.On("Error", mock2.Anything)
+		env.On("Flags").Return(&runtime.Flags{})
 
-		d := &CarbonIntensity{
-			props: props,
-			env:   env,
-		}
+		d := &CarbonIntensity{}
+		d.Init(props, env)
 
 		enabled := d.Enabled()
 		assert.Equal(t, tc.ExpectedEnabled, enabled, tc.Case)
@@ -244,23 +241,4 @@ func TestCarbonIntensitySegmentSingle(t *testing.T) {
 		}
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, tc.Template, d), tc.Case)
 	}
-}
-
-func TestCarbonIntensitySegmentFromCache(t *testing.T) {
-	response := `{ "data": [ { "from": "2023-10-27T12:30Z", "to": "2023-10-27T13:00Z", "intensity": { "forecast": 199, "actual": 193, "index": "moderate" } } ] }`
-	expectedString := "CO₂ •193 ↗ 199"
-
-	env := &mock.MockedEnvironment{}
-	cache := &mock.MockedCache{}
-
-	d := &CarbonIntensity{
-		props: properties.Map{},
-		env:   env,
-	}
-	cache.On("Get", CARBONINTENSITYURL).Return(response, true)
-	cache.On("Set").Return()
-	env.On("Cache").Return(cache)
-
-	assert.Nil(t, d.setStatus())
-	assert.Equal(t, expectedString, renderTemplate(env, d.Template(), d), "should return the cached response")
 }

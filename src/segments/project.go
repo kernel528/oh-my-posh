@@ -7,18 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 	"golang.org/x/exp/slices"
 
+	yaml "github.com/goccy/go-yaml"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
 type ProjectItem struct {
+	Fetcher func(item ProjectItem) *ProjectData
 	Name    string
 	Files   []string
-	Fetcher func(item ProjectItem) *ProjectData
 }
 
 type ProjectData struct {
@@ -52,38 +53,14 @@ type NuSpec struct {
 }
 
 type Project struct {
-	props properties.Properties
-	env   platform.Environment
-
-	projects []*ProjectItem
-	Error    string
+	base
 
 	ProjectData
+	Error    string
+	projects []*ProjectItem
 }
 
 func (n *Project) Enabled() bool {
-	for _, item := range n.projects {
-		if n.hasProjectFile(item) {
-			data := item.Fetcher(*item)
-			if data == nil {
-				continue
-			}
-			n.ProjectData = *data
-			n.ProjectData.Type = item.Name
-			return true
-		}
-	}
-	return n.props.GetBool(properties.AlwaysEnabled, false)
-}
-
-func (n *Project) Template() string {
-	return " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Version }}\uf487 {{.Version}} {{ end }}{{ if .Name }}{{ .Name }} {{ end }}{{ if .Target }}\uf4de {{.Target}} {{ end }}{{ end }}" //nolint:lll
-}
-
-func (n *Project) Init(props properties.Properties, env platform.Environment) {
-	n.props = props
-	n.env = env
-
 	n.projects = []*ProjectItem{
 		{
 			Name:    "node",
@@ -101,9 +78,19 @@ func (n *Project) Init(props properties.Properties, env platform.Environment) {
 			Fetcher: n.getPythonPackage,
 		},
 		{
+			Name:    "mojo",
+			Files:   []string{"mojoproject.toml"},
+			Fetcher: n.getPythonPackage,
+		},
+		{
 			Name:    "php",
 			Files:   []string{"composer.json"},
 			Fetcher: n.getNodePackage,
+		},
+		{
+			Name:    "dart",
+			Files:   []string{"pubspec.yaml"},
+			Fetcher: n.getDartPackage,
 		},
 		{
 			Name:    "nuspec",
@@ -126,6 +113,23 @@ func (n *Project) Init(props properties.Properties, env platform.Environment) {
 			Fetcher: n.getPowerShellModuleData,
 		},
 	}
+
+	for _, item := range n.projects {
+		if n.hasProjectFile(item) {
+			data := item.Fetcher(*item)
+			if data == nil {
+				continue
+			}
+			n.ProjectData = *data
+			n.ProjectData.Type = item.Name
+			return true
+		}
+	}
+	return n.props.GetBool(properties.AlwaysEnabled, false)
+}
+
+func (n *Project) Template() string {
+	return " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Version }}\uf487 {{.Version}} {{ end }}{{ if .Name }}{{ .Name }} {{ end }}{{ if .Target }}\uf4de {{.Target}} {{ end }}{{ end }}" //nolint:lll
 }
 
 func (n *Project) hasProjectFile(p *ProjectItem) bool {
@@ -188,6 +192,18 @@ func (n *Project) getPythonPackage(item ProjectItem) *ProjectData {
 	}
 }
 
+func (n *Project) getDartPackage(item ProjectItem) *ProjectData {
+	content := n.env.FileContent(item.Files[0])
+	var data ProjectData
+	err := yaml.Unmarshal([]byte(content), &data)
+	if err != nil {
+		n.Error = err.Error()
+		return nil
+	}
+
+	return &data
+}
+
 func (n *Project) getNuSpecPackage(_ ProjectItem) *ProjectData {
 	files := n.env.LsDir(n.env.Pwd())
 	var content string
@@ -241,7 +257,7 @@ func (n *Project) getDotnetProject(_ ProjectItem) *ProjectData {
 	}
 
 	if len(target) == 0 {
-		n.env.Error(fmt.Errorf("cannot extract TFM from %s project file", name))
+		log.Error(fmt.Errorf("cannot extract TFM from %s project file", name))
 	}
 
 	return &ProjectData{

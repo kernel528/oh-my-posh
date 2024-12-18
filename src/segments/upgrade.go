@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/upgrade"
 )
@@ -16,8 +16,7 @@ type UpgradeCache struct {
 }
 
 type Upgrade struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	// deprecated
 	Version string
@@ -25,15 +24,12 @@ type Upgrade struct {
 	UpgradeCache
 }
 
-const UPGRADECACHEKEY = "upgrade_segment"
+const (
+	UPGRADECACHEKEY = "upgrade_segment"
+)
 
 func (u *Upgrade) Template() string {
 	return " \uf019 "
-}
-
-func (u *Upgrade) Init(props properties.Properties, env platform.Environment) {
-	u.props = props
-	u.env = env
 }
 
 func (u *Upgrade) Enabled() bool {
@@ -72,25 +68,30 @@ func (u *Upgrade) cachedLatest(current string) (*UpgradeCache, error) {
 }
 
 func (u *Upgrade) checkUpdate(current string) (*UpgradeCache, error) {
-	tag, err := upgrade.Latest(u.env)
+	duration := u.props.GetString(properties.CacheDuration, string(cache.ONEWEEK))
+	source := u.props.GetString(Source, string(upgrade.CDN))
+
+	cfg := &upgrade.Config{
+		Source:   upgrade.Source(source),
+		Interval: cache.Duration(duration),
+	}
+
+	latest, err := cfg.Latest()
 	if err != nil {
 		return nil, err
 	}
 
-	latest := tag[1:]
 	cacheData := &UpgradeCache{
 		Latest:  latest,
 		Current: current,
 	}
+
 	cacheJSON, err := json.Marshal(cacheData)
 	if err != nil {
 		return nil, err
 	}
 
-	oneWeek := 10080
-	cacheTimeout := u.props.GetInt(properties.CacheTimeout, oneWeek)
-	// update cache
-	u.env.Cache().Set(UPGRADECACHEKEY, string(cacheJSON), cacheTimeout)
+	u.env.Cache().Set(UPGRADECACHEKEY, string(cacheJSON), cache.Duration(duration))
 
 	return cacheData, nil
 }
