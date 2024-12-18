@@ -75,7 +75,10 @@
           "foreground": "darkGray",
           "style": "plain",
           "template": "[{{ .CurrentDate | date .Format }}]",
-          "type": "time"
+          "type": "time",
+          "properties": {
+            "time_format": "2006-01-02 15:04:05"
+          }
         },
         {
           "properties": {
