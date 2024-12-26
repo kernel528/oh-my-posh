@@ -36,7 +36,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
-	fontCLI "github.com/jandedobbeleer/oh-my-posh/src/font"
+	font_ "github.com/jandedobbeleer/oh-my-posh/src/font"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
@@ -145,6 +145,8 @@ func (ir *Renderer) Init(env runtime.Environment) error {
 
 	ir.cleanContent()
 
+	font_.SetCache(env.Cache())
+
 	if err := ir.loadFonts(); err != nil {
 		return &ConnectionError{reason: err.Error()}
 	}
@@ -229,7 +231,7 @@ func (ir *Renderer) loadFonts() error {
 		url := "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip"
 		var err error
 
-		data, err = fontCLI.Download(url)
+		data, err = font_.Download(url)
 		if err != nil {
 			return err
 		}
