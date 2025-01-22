@@ -67,11 +67,6 @@
           "style": "plain"
         },
         {
-          "properties": {
-            "fetch_status": true
-          }
-        },
-        {
           "foreground": "darkGray",
           "style": "plain",
           "template": "[{{ .CurrentDate | date .Format }}]",
