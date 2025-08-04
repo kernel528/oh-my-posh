@@ -87,6 +87,15 @@ var testAgnosterPathStyleCases = []testAgnosterPathStyleCase{
 		PathSeparator:       "/",
 		FolderSeparatorIcon: " > ",
 	},
+	{
+		Style:               Unique,
+		Expected:            "/a > c > ef",
+		HomePath:            homeDir,
+		Pwd:                 "/ab/cd/ef",
+		PathSeparator:       "/",
+		FolderSeparatorIcon: " > ",
+		DisplayRoot:         true,
+	},
 
 	{
 		Style:               Powerlevel,
@@ -114,6 +123,16 @@ var testAgnosterPathStyleCases = []testAgnosterPathStyleCase{
 		PathSeparator:       "/",
 		FolderSeparatorIcon: "/",
 		MaxWidth:            50,
+	},
+	{
+		Style:               Powerlevel,
+		Expected:            "/var/cache/pacman",
+		HomePath:            homeDir,
+		Pwd:                 "/var/cache/pacman",
+		PathSeparator:       "/",
+		FolderSeparatorIcon: "/",
+		MaxWidth:            50,
+		DisplayRoot:         true,
 	},
 
 	{
@@ -688,7 +707,7 @@ func TestFolderPathCustomMappedLocations(t *testing.T) {
 	env.On("Shell").Return(shell.GENERIC)
 
 	template.Cache = new(cache.Template)
-	template.Init(env, nil)
+	template.Init(env, nil, nil)
 
 	props := properties.Map{
 		properties.Style: FolderType,
@@ -734,7 +753,7 @@ func TestReplaceMappedLocations(t *testing.T) {
 		env.On("Home").Return("/a/b/k")
 
 		template.Cache = new(cache.Template)
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		props := properties.Map{
 			MappedLocationsEnabled: tc.MappedLocationsEnabled,
@@ -794,7 +813,7 @@ func TestGetPwd(t *testing.T) {
 		env.On("Shell").Return(shell.PWSH)
 
 		template.Cache = new(cache.Template)
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		props := properties.Map{
 			MappedLocationsEnabled: tc.MappedLocationsEnabled,

@@ -25,7 +25,6 @@ var (
 		"pwsh",
 		"cmd",
 		"nu",
-		"tcsh",
 		"elvish",
 		"xonsh",
 	}
@@ -39,7 +38,7 @@ func init() {
 
 func createInitCmd() *cobra.Command {
 	initCmd := &cobra.Command{
-		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu|tcsh|elvish|xonsh]",
+		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu|elvish|xonsh]",
 		Short: "Initialize your shell and config",
 		Long: `Initialize your shell and config.
 
@@ -59,6 +58,7 @@ See the documentation to initialize your shell: https://ohmyposh.dev/docs/instal
 	initCmd.Flags().BoolVarP(&printOutput, "print", "p", false, "print the init script")
 	initCmd.Flags().BoolVarP(&strict, "strict", "s", false, "run in strict mode")
 	initCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
+	initCmd.Flags().BoolVar(&eval, "eval", false, "output the prompt for eval")
 
 	_ = initCmd.MarkPersistentFlagRequired("config")
 
@@ -70,25 +70,25 @@ func runInit(sh string) {
 
 	if debug {
 		startTime = time.Now()
-		log.Enable()
-		log.Debug("debug mode enabled")
+		log.Enable(plain)
 	}
 
-	configFile := config.Path(configFlag)
-	cfg := config.Load(configFile, sh, false)
+	cfg, hash := config.Load(configFlag, sh, false)
 
 	flags := &runtime.Flags{
 		Shell:     sh,
-		Config:    configFile,
+		Config:    cfg.Source,
 		Strict:    strict,
 		Debug:     debug,
 		SaveCache: true,
+		Init:      true,
+		Eval:      eval,
 	}
 
 	env := &runtime.Terminal{}
 	env.Init(flags)
 
-	template.Init(env, cfg.Var)
+	template.Init(env, cfg.Var, cfg.Maps)
 
 	defer func() {
 		template.SaveCache()
@@ -96,6 +96,7 @@ func runInit(sh string) {
 	}()
 
 	feats := cfg.Features(env)
+	flags.ConfigHash = fmt.Sprintf("%s.%s", hash, feats.Hash())
 
 	var output string
 

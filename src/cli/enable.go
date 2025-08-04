@@ -22,7 +22,7 @@ var (
 	toggleLong = strings.Join(append([]string{toggleHelpText}, toggleArgs...), "\n- ")
 )
 
-// getCmd represents the get command
+// enableCmd represents the enable command
 var enableCmd = &cobra.Command{
 	Use:       fmt.Sprintf(toggleUse, "enable"),
 	Short:     "Enable a feature",
@@ -52,7 +52,7 @@ func toggleFeature(cmd *cobra.Command, feature string, enable bool) {
 	env.Init(flags)
 	defer env.Close()
 
-	if len(feature) == 0 {
+	if feature == "" {
 		_ = cmd.Help()
 		return
 	}

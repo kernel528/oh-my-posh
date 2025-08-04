@@ -49,13 +49,15 @@ understand how to configure a segment.
 | `templates`                | `[]Template` | in some cases having a single [template][templates] string is a bit cumbersome. Templates allows you to span the segment's [template][templates] string multiple lines where every [template][templates] is evaluated and depending on what you aim to achieve, there are two possible outcomes based on `templates_logic` |
 | `templates_logic`          | `string`     | <ul><li>`first_match`: return the first non-whitespace string and skip everything else</li><li>`join`:evaluate all templates and join all non-whitespace strings (**default**)</li></ul>                                                                                                                                   |
 | `properties`               | `[]Property` | see [Properties][properties] below                                                                                                                                                                                                                                                                                         |
-| `interactive`              | `boolean`    | when is true, the segment text is not escaped to allow the use of interactive prompt escape sequences in Bash/Zsh - defaults to `false`                                                                                                                                                                                    |
+| `interactive`              | `boolean`    | when true, the segment text is not escaped to allow the use of interactive prompt escape sequences in Bash/Zsh - defaults to `false`                                                                                                                                                                                       |
 | `alias`                    | `string`     | for use with [cross segment template properties][cstp]                                                                                                                                                                                                                                                                     |
 | `min_width`                | `int`        | if the terminal width is smaller than this value, the segment will be hidden. For your terminal width, see `oh-my-posh get width`. Defaults to `0` (disable)                                                                                                                                                               |
 | `max_width`                | `int`        | if the terminal width exceeds this value, the segment will be hidden. For your terminal width, see `oh-my-posh get width`. Defaults to `0` (disable)                                                                                                                                                                       |
 | `cache`                    | `Cache`      | how to cache the segment to avoid fetching information too much, see [below][cache]                                                                                                                                                                                                                                        |
 | `include_folders`          | `[]string`   | define which folders to include to enable the segment, see [below][include-exclude]                                                                                                                                                                                                                                        |
 | `exclude_folders`          | `[]string`   | define which folders to exclude to disable the segment, see [below][include-exclude]                                                                                                                                                                                                                                       |
+| `force`                    | `boolean`    | when true, the segment is always rendered, even when it's only whitespace - defaults to `false`                                                                                                                                                                                                                            |
+| `index`                    | `int`        | used to [override] a specific segment (1-based)                                                                                                                                                                                                                                                                            |
 
 :::warning
 In Bash/Zsh, when the property `interactive` is `true` for a segment, the prompt length calculation can be wrong
@@ -109,6 +111,12 @@ segment background as their foreground color.
 
 Same as Powerline except that it will display even when disabled, but without text. That way it seems
 as if the segment is not expanded, just like an accordion.
+
+## Properties
+
+The `properties` attribute allows you to customize the behavior and appearance of a segment beyond the default settings.
+These options can be anything from feature flags, configuration or additional styling details that will only apply to the segment in question.
+To understand the available properties for a particular segment, refer to its corresponding documentation section where each property is explained in detail.
 
 ## Cache
 
@@ -194,6 +202,11 @@ This means that for user Bill, who has a user account `Bill` on Windows and `bil
 `C:\Users\Bill\Foo` or `C:\Users\Bill\foo` on Windows but only `/home/bill/Foo` on Linux.
 :::
 
+## Index
+
+The index of the segment in the configuration. This is used to [override] a specific segment in a base configuration.
+This is a 1-based index, so the first segment has an index of `1`.
+
 ## Hiding segments
 
 ### Conditionally
@@ -238,3 +251,4 @@ To list the currently toggled segments, use `oh-my-posh get toggles`.
 [cache]: #cache
 [include-exclude]: #include--exclude-folders
 [time.ParseDuration]: https://golang.org/pkg/time/#ParseDuration
+[override]: /docs/configuration/general#extends

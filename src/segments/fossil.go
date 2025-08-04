@@ -48,10 +48,10 @@ func (f *Fossil) Enabled() bool {
 	}
 
 	f.Status = &FossilStatus{}
-	lines := strings.Split(output, "\n")
+	lines := strings.SplitSeq(output, "\n")
 
-	for _, line := range lines {
-		if len(line) == 0 {
+	for line := range lines {
+		if line == "" {
 			continue
 		}
 		context := strings.SplitN(line, " ", 2)

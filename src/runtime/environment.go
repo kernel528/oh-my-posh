@@ -16,6 +16,7 @@ const (
 	WINDOWS = "windows"
 	DARWIN  = "darwin"
 	LINUX   = "linux"
+	FREEBSD = "freebsd"
 	CMD     = "cmd"
 
 	PRIMARY = "primary"
@@ -78,24 +79,27 @@ type Flags struct {
 	PWD           string
 	AbsolutePWD   string
 	Type          string
-	ErrorCode     int
+	ConfigHash    string
 	PromptCount   int
-	StackCount    int
 	Column        int
 	TerminalWidth int
 	ExecutionTime float64
+	StackCount    int
+	ErrorCode     int
 	JobCount      int
-	IsPrimary     bool
+	Strict        bool
 	HasExtra      bool
 	Debug         bool
-	Plain         bool
-	Strict        bool
 	Cleared       bool
 	NoExitCode    bool
 	SaveCache     bool
 	Init          bool
 	Migrate       bool
 	Eval          bool
+	Escape        bool
+	IsPrimary     bool
+	Plain         bool
+	Force         bool
 }
 
 type CommandError struct {

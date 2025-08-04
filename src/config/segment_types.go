@@ -16,8 +16,10 @@ type SegmentWriter interface {
 	Enabled() bool
 	Template() string
 	SetText(text string)
+	SetIndex(index int)
 	Text() string
 	Init(props properties.Properties, env runtime.Environment)
+	CacheKey() (string, bool)
 }
 
 const (
@@ -107,6 +109,10 @@ const (
 	IPIFY SegmentType = "ipify"
 	// JAVA writes the active java version
 	JAVA SegmentType = "java"
+	// API writes the output of a custom JSON API
+	HTTP SegmentType = "http"
+	// JUJUTSU writes Jujutsu source control information
+	JUJUTSU SegmentType = "jujutsu"
 	// JULIA writes which julia version is currently active
 	JULIA SegmentType = "julia"
 	// KOTLIN writes the active kotlin version
@@ -117,7 +123,7 @@ const (
 	LASTFM SegmentType = "lastfm"
 	// LUA writes the active lua version
 	LUA SegmentType = "lua"
-	// MERCURIAL writes the Mercurial source control information
+	// MERCURIAL writes Mercurial source control information
 	MERCURIAL SegmentType = "mercurial"
 	// MOJO writes the active version of Mojo and the name of the Magic virtual env
 	MOJO SegmentType = "mojo"
@@ -129,6 +135,8 @@ const (
 	NBGV SegmentType = "nbgv"
 	// NIGHTSCOUT is an open source diabetes system
 	NIGHTSCOUT SegmentType = "nightscout"
+	// NIM writes the active nim version
+	NIM SegmentType = "nim"
 	// NIXSHELL writes the active nix shell details
 	NIXSHELL SegmentType = "nix-shell"
 	// NODE writes which node version is currently active
@@ -211,6 +219,8 @@ const (
 	UNITY SegmentType = "unity"
 	// UPGRADE lets you know if you can upgrade Oh My Posh
 	UPGRADE SegmentType = "upgrade"
+	// V writes the active vlang version
+	V SegmentType = "v"
 	// VALA writes the active vala version
 	VALA SegmentType = "vala"
 	// WAKATIME writes tracked time spend in dev editors
@@ -271,6 +281,8 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	HELM:            func() SegmentWriter { return &segments.Helm{} },
 	IPIFY:           func() SegmentWriter { return &segments.IPify{} },
 	JAVA:            func() SegmentWriter { return &segments.Java{} },
+	HTTP:            func() SegmentWriter { return &segments.HTTP{} },
+	JUJUTSU:         func() SegmentWriter { return &segments.Jujutsu{} },
 	JULIA:           func() SegmentWriter { return &segments.Julia{} },
 	KOTLIN:          func() SegmentWriter { return &segments.Kotlin{} },
 	KUBECTL:         func() SegmentWriter { return &segments.Kubectl{} },
@@ -283,6 +295,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	NBGV:            func() SegmentWriter { return &segments.Nbgv{} },
 	NIGHTSCOUT:      func() SegmentWriter { return &segments.Nightscout{} },
 	NIXSHELL:        func() SegmentWriter { return &segments.NixShell{} },
+	NIM:             func() SegmentWriter { return &segments.Nim{} },
 	NODE:            func() SegmentWriter { return &segments.Node{} },
 	NPM:             func() SegmentWriter { return &segments.Npm{} },
 	NX:              func() SegmentWriter { return &segments.Nx{} },
@@ -323,6 +336,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	UMBRACO:         func() SegmentWriter { return &segments.Umbraco{} },
 	UNITY:           func() SegmentWriter { return &segments.Unity{} },
 	UPGRADE:         func() SegmentWriter { return &segments.Upgrade{} },
+	V:               func() SegmentWriter { return &segments.V{} },
 	VALA:            func() SegmentWriter { return &segments.Vala{} },
 	WAKATIME:        func() SegmentWriter { return &segments.Wakatime{} },
 	WINREG:          func() SegmentWriter { return &segments.WindowsRegistry{} },

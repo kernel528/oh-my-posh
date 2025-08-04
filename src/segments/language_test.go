@@ -2,6 +2,7 @@ package segments
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 
 	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache/mock"
@@ -33,12 +34,7 @@ type languageArgs struct {
 }
 
 func (l *languageArgs) hasvalue(value string, list []string) bool {
-	for _, element := range list {
-		if element == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, value)
 }
 
 func bootStrapLanguageTest(args *languageArgs) *language {
@@ -421,7 +417,7 @@ func TestLanguageHyperlinkEnabled(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.version.URL)
+	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.URL)
 }
 
 func TestLanguageHyperlinkEnabledWrongRegex(t *testing.T) {
@@ -508,7 +504,7 @@ func TestLanguageInnerHyperlink(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.version.URL)
+	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.URL)
 }
 
 func TestLanguageHyperlinkTemplatePropertyTakesPriority(t *testing.T) {
@@ -531,7 +527,7 @@ func TestLanguageHyperlinkTemplatePropertyTakesPriority(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://custom/url/template/1.3", lang.version.URL)
+	assert.Equal(t, "https://custom/url/template/1.3", lang.URL)
 }
 
 type mockedLanguageParams struct {

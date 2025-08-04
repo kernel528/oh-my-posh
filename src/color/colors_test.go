@@ -25,11 +25,11 @@ func TestGetAnsiFromColorString(t *testing.T) {
 		{Case: "Invalid background", Expected: emptyColor, Color: "invalid", Background: true},
 		{Case: "Invalid background", Expected: emptyColor, Color: "invalid", Background: false},
 		{Case: "Hex foreground", Expected: Ansi("38;2;170;187;204"), Color: "#AABBCC", Background: false},
-		{Case: "Hex backgrond", Expected: Ansi("48;2;170;187;204"), Color: "#AABBCC", Background: true},
+		{Case: "Hex background", Expected: Ansi("48;2;170;187;204"), Color: "#AABBCC", Background: true},
 		{Case: "Base 8 foreground", Expected: Ansi("31"), Color: "red", Background: false},
 		{Case: "Base 8 background", Expected: Ansi("41"), Color: "red", Background: true},
 		{Case: "Base 16 foreground", Expected: Ansi("91"), Color: "lightRed", Background: false},
-		{Case: "Base 16 backround", Expected: Ansi("101"), Color: "lightRed", Background: true},
+		{Case: "Base 16 background", Expected: Ansi("101"), Color: "lightRed", Background: true},
 		{Case: "Non true color TERM", Expected: Ansi("38;5;146"), Color: "#AABBCC", Color256: true},
 	}
 	for _, tc := range cases {
@@ -81,7 +81,7 @@ func TestAnsiRender(t *testing.T) {
 		env.On("Shell").Return("foo")
 
 		template.Cache = new(cache.Template)
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		ansi := Ansi("{{ if eq \"vscode\" .Env.TERM_PROGRAM }}#123456{{end}}")
 		got := ansi.ResolveTemplate()

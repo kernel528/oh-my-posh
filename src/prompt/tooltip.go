@@ -1,6 +1,8 @@
 package prompt
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
@@ -13,7 +15,7 @@ func (e *Engine) Tooltip(tip string) string {
 	tooltips := make([]*config.Segment, 0, 1)
 
 	for _, tooltip := range e.Config.Tooltips {
-		if !e.shouldInvokeWithTip(tooltip, tip) {
+		if !slices.Contains(tooltip.Tips, tip) {
 			continue
 		}
 
@@ -43,6 +45,8 @@ func (e *Engine) Tooltip(tip string) string {
 		return ""
 	}
 
+	text, length = e.handleToolTipAction(text, length)
+
 	switch e.Env.Shell() {
 	case shell.PWSH, shell.PWSH5:
 		e.rprompt = text
@@ -63,12 +67,34 @@ func (e *Engine) Tooltip(tip string) string {
 	}
 }
 
-func (e *Engine) shouldInvokeWithTip(segment *config.Segment, tip string) bool {
-	for _, t := range segment.Tips {
-		if t == tip {
-			return true
-		}
+func (e *Engine) handleToolTipAction(text string, length int) (string, int) {
+	if e.Config.ToolTipsAction.IsDefault() {
+		return text, length
 	}
 
-	return false
+	rprompt, OK := e.Env.Session().Get(RPromptKey)
+	if !OK {
+		return text, length
+	}
+
+	rpromptLengthStr, OK := e.Env.Session().Get(RPromptLengthKey)
+	if !OK {
+		return text, length
+	}
+
+	rpromptLength, err := strconv.Atoi(rpromptLengthStr)
+	if err != nil {
+		return text, length
+	}
+
+	length += rpromptLength
+
+	switch e.Config.ToolTipsAction {
+	case config.Extend:
+		text = rprompt + text
+	case config.Prepend:
+		text += rprompt
+	}
+
+	return text, length
 }

@@ -84,7 +84,7 @@ func TestPrintPWD(t *testing.T) {
 
 	for _, tc := range cases {
 		env := new(mock.Environment)
-		if len(tc.Pwd) == 0 {
+		if tc.Pwd == "" {
 			tc.Pwd = "pwd"
 		}
 
@@ -96,9 +96,9 @@ func TestPrintPWD(t *testing.T) {
 
 		template.Cache = &cache.Template{
 			Shell:    tc.Shell,
-			Segments: maps.NewConcurrent(),
+			Segments: maps.NewConcurrent[any](),
 		}
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		terminal.Init(shell.GENERIC)
 
@@ -117,13 +117,13 @@ func TestPrintPWD(t *testing.T) {
 }
 
 func BenchmarkEngineRender(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		engineRender()
 	}
 }
 
 func engineRender() {
-	cfg := config.Load("", shell.GENERIC, false)
+	cfg, _ := config.Load("", shell.GENERIC, false)
 
 	env := &runtime.Terminal{}
 	env.Init(nil)
@@ -131,9 +131,9 @@ func engineRender() {
 	defer env.Close()
 
 	template.Cache = &cache.Template{
-		Segments: maps.NewConcurrent(),
+		Segments: maps.NewConcurrent[any](),
 	}
-	template.Init(env, nil)
+	template.Init(env, nil, nil)
 
 	terminal.Init(shell.GENERIC)
 	terminal.BackgroundColor = cfg.TerminalBackground.ResolveTemplate()
@@ -199,9 +199,9 @@ func TestGetTitle(t *testing.T) {
 			HostName: "MyHost",
 			PWD:      tc.Cwd,
 			Folder:   "vagrant",
-			Segments: maps.NewConcurrent(),
+			Segments: maps.NewConcurrent[any](),
 		}
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		engine := &Engine{
 			Config: &config.Config{
@@ -261,9 +261,9 @@ func TestGetConsoleTitleIfGethostnameReturnsError(t *testing.T) {
 			UserName: "MyUser",
 			Root:     tc.Root,
 			HostName: "",
-			Segments: maps.NewConcurrent(),
+			Segments: maps.NewConcurrent[any](),
 		}
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		engine := &Engine{
 			Config: &config.Config{
@@ -373,9 +373,9 @@ func TestShouldFill(t *testing.T) {
 
 		template.Cache = &cache.Template{
 			Shell:    shell.GENERIC,
-			Segments: maps.NewConcurrent(),
+			Segments: maps.NewConcurrent[any](),
 		}
-		template.Init(env, nil)
+		template.Init(env, nil, nil)
 
 		terminal.Init(shell.GENERIC)
 		terminal.Plain = true

@@ -10,7 +10,7 @@ import (
 )
 
 type File struct {
-	cache         *maps.Concurrent
+	cache         *maps.Concurrent[any]
 	cacheFilePath string
 	dirty         bool
 	persist       bool
@@ -19,7 +19,7 @@ type File struct {
 func (fc *File) Init(cacheFilePath string, persist bool) {
 	defer log.Trace(time.Now(), cacheFilePath)
 
-	fc.cache = maps.NewConcurrent()
+	fc.cache = maps.NewConcurrent[any]()
 	fc.cacheFilePath = cacheFilePath
 	fc.persist = persist
 
@@ -40,6 +40,7 @@ func (fc *File) Init(cacheFilePath string, persist bool) {
 
 	for key, co := range list {
 		if co.Expired() {
+			log.Debug("skipping expired cache key:", key)
 			continue
 		}
 
@@ -49,7 +50,8 @@ func (fc *File) Init(cacheFilePath string, persist bool) {
 }
 
 func (fc *File) Close() {
-	if !fc.persist || !fc.dirty {
+	if fc == nil || !fc.persist || !fc.dirty {
+		log.Debug("not persisting cache")
 		return
 	}
 
@@ -63,25 +65,40 @@ func (fc *File) Close() {
 // returns the value for the given key as long as
 // the duration is not expired
 func (fc *File) Get(key string) (string, bool) {
+	if fc == nil {
+		log.Debug("cache is nil, returning empty value for key:", key)
+		return "", false
+	}
+
 	val, found := fc.cache.Get(key)
 	if !found {
+		log.Debug("cache key not found:", key)
 		return "", false
 	}
 
 	if co, ok := val.(*Entry); ok {
+		log.Debug("getting cache key:", key, "with value:", co.Value)
 		return co.Value, true
 	}
 
+	log.Debug("unable to parse cache key:", key)
 	return "", false
 }
 
 // sets the value for the given key with a duration
 func (fc *File) Set(key, value string, duration Duration) {
+	if fc == nil {
+		log.Debug("cache is nil, not setting value for key:", key)
+		return
+	}
+
 	seconds := duration.Seconds()
 
 	if seconds == 0 {
 		return
 	}
+
+	log.Debug("setting cache key:", key, "with duration:", string(duration))
 
 	fc.cache.Set(key, &Entry{
 		Value:     value,
@@ -94,6 +111,12 @@ func (fc *File) Set(key, value string, duration Duration) {
 
 // delete the key from the cache
 func (fc *File) Delete(key string) {
+	if fc == nil {
+		log.Debug("cache is nil, not deleting key:", key)
+		return
+	}
+
+	log.Debug("deleting cache key:", key)
 	fc.cache.Delete(key)
 	fc.dirty = true
 }

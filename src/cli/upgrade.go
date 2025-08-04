@@ -5,24 +5,36 @@ import (
 	"os"
 	stdruntime "runtime"
 	"slices"
+	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
-	"github.com/jandedobbeleer/oh-my-posh/src/upgrade"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 	"github.com/spf13/cobra"
 )
 
-var force bool
+var (
+	force bool
+)
 
-// noticeCmd represents the get command
+// upgradeCmd represents the upgrade command
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade when a new version is available.",
 	Long:  "Upgrade when a new version is available.",
 	Args:  cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
+		var startTime time.Time
+
+		if debug {
+			startTime = time.Now()
+			log.Enable(plain)
+		}
+
 		supportedPlatforms := []string{
 			runtime.WINDOWS,
 			runtime.DARWIN,
@@ -30,63 +42,89 @@ var upgradeCmd = &cobra.Command{
 		}
 
 		if !slices.Contains(supportedPlatforms, stdruntime.GOOS) {
+			log.Debug("unsupported platform")
 			return
 		}
 
 		sh := os.Getenv("POSH_SHELL")
 
 		env := &runtime.Terminal{}
-		env.Init(nil)
-		defer env.Close()
+		env.Init(&runtime.Flags{
+			Debug:     debug,
+			SaveCache: true,
+		})
 
 		terminal.Init(sh)
 		fmt.Print(terminal.StartProgress())
 
-		configFile := config.Path(configFlag)
-		cfg := config.Load(configFile, sh, false)
-		cfg.Upgrade.Cache = env.Cache()
+		cfg, _ := config.Load(configFlag, sh, false)
 
-		latest, err := cfg.Upgrade.Latest()
+		defer func() {
+			fmt.Print(terminal.StopProgress())
+
+			// always reset the cache key so we respect the interval no matter what the outcome
+			env.Cache().Set(upgrade.CACHEKEY, "", cfg.Upgrade.Interval)
+
+			env.Close()
+
+			if !debug {
+				return
+			}
+
+			sb := text.NewBuilder()
+
+			sb.WriteString(fmt.Sprintf("%s %s\n", log.Text("Upgrade duration:").Green().Bold().Plain(), time.Since(startTime)))
+
+			sb.WriteString(log.Text("\nLogs:\n\n").Green().Bold().Plain().String())
+			sb.WriteString(env.Logs())
+
+			fmt.Println(sb.String())
+		}()
+
+		latest, err := cfg.Upgrade.FetchLatest()
 		if err != nil {
-			fmt.Printf("\n❌ %s\n\n%s", err, terminal.StopProgress())
-			os.Exit(1)
+			log.Debug("failed to get latest version")
+			log.Error(err)
+			fmt.Printf("\n  ❌ %s\n\n", err)
+
+			exitcode = 1
 			return
 		}
 
-		cfg.Upgrade.Version = fmt.Sprintf("v%s", latest)
-
 		if force {
-			executeUpgrade(cfg.Upgrade)
+			log.Debug("forced upgrade")
+			exitcode = executeUpgrade(cfg.Upgrade)
 			return
 		}
 
 		if upgrade.IsMajorUpgrade(build.Version, latest) {
-			message := terminal.StopProgress()
-			message += fmt.Sprintf("\n🚨 major upgrade available: v%s -> v%s, use oh-my-posh upgrade --force to upgrade\n\n", build.Version, latest)
+			log.Debug("major upgrade available")
+			message := fmt.Sprintf("\n  🚨 major upgrade available: v%s -> v%s, use oh-my-posh upgrade --force to upgrade\n\n", build.Version, latest)
 			fmt.Print(message)
 			return
 		}
 
 		if build.Version != latest {
-			executeUpgrade(cfg.Upgrade)
+			exitcode = executeUpgrade(cfg.Upgrade)
 			return
 		}
-
-		fmt.Print(terminal.StopProgress())
 	},
 }
 
-func executeUpgrade(cfg *upgrade.Config) {
+func executeUpgrade(cfg *upgrade.Config) int {
 	err := upgrade.Run(cfg)
-	fmt.Print(terminal.StopProgress())
 	if err == nil {
-		return
+		return 0
 	}
 
-	os.Exit(1)
+	log.Debug("failed to upgrade")
+	log.Error(err)
+
+	return 1
 }
 
 func init() {
 	upgradeCmd.Flags().BoolVarP(&force, "force", "f", false, "force the upgrade even if the version is up to date")
+	upgradeCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
 	RootCmd.AddCommand(upgradeCmd)
 }

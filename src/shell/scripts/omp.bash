@@ -2,7 +2,6 @@ export POSH_THEME=::CONFIG::
 export POSH_SHELL='bash'
 export POSH_SHELL_VERSION=$BASH_VERSION
 export POWERLINE_COMMAND='oh-my-posh'
-export POSH_SESSION_ID=::SESSION_ID::
 export CONDA_PROMPT_MODIFIER=false
 export OSTYPE=$OSTYPE
 
@@ -18,6 +17,8 @@ _omp_no_status=true
 _omp_status=0
 _omp_pipestatus=0
 _omp_executable=::OMP::
+
+export POSH_SESSION_ID=$("$_omp_executable" get uuid)
 
 # switches to enable/disable features
 _omp_cursor_positioning=0
@@ -142,15 +143,25 @@ function _omp_hook() {
 }
 
 function _omp_install_hook() {
-    [[ $TERM = linux ]] && return
-
     local cmd
+    local prompt_command
+
     for cmd in "${PROMPT_COMMAND[@]}"; do
+        # skip initializing when we're already initialized
         if [[ $cmd = _omp_hook ]]; then
             return
         fi
+
+        # check if the command starts with source, if so, do not add it again
+        # this is done to avoid issues with sourcing the same file multiple times
+        if [[ $cmd = source* ]]; then
+            continue
+        fi
+
+        prompt_command+=("$cmd")
     done
-    PROMPT_COMMAND=(_omp_hook "${PROMPT_COMMAND[@]}")
+
+    PROMPT_COMMAND=(_omp_hook "${prompt_command[@]}")
 }
 
 _omp_install_hook

@@ -3,9 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/spf13/cobra"
 )
 
@@ -13,6 +16,8 @@ var (
 	configFlag   string
 	shellName    string
 	printVersion bool
+	trace        bool
+	exitcode     int
 
 	// for internal use only
 	silent bool
@@ -40,6 +45,49 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 
 		_ = cmd.Help()
 	},
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		traceEnv := os.Getenv("POSH_TRACE")
+		if traceEnv == "" {
+			return
+		}
+
+		trace = true
+
+		log.Enable(true)
+
+		log.Debug("oh-my-posh version", build.Version)
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		defer func() {
+			if exitcode != 0 {
+				os.Exit(exitcode)
+			}
+		}()
+
+		if !trace {
+			return
+		}
+
+		timestamp := time.Now().Format("20060102T150405.000")
+		cli := append([]string{cmd.Name()}, args...)
+		filename := fmt.Sprintf("%s-%s.log", timestamp, strings.Join(cli, "-"))
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+
+		logPath := filepath.Join(home, ".oh-my-posh")
+		err = os.MkdirAll(logPath, 0755)
+		if err != nil {
+			return
+		}
+
+		err = os.WriteFile(filepath.Join(logPath, filename), []byte(log.String()), 0644)
+		if err != nil {
+			return
+		}
+	},
 }
 
 func Execute() {
@@ -60,4 +108,7 @@ func init() {
 
 	// Hide flags that are deprecated or for internal use only.
 	_ = RootCmd.PersistentFlags().MarkHidden("silent")
+
+	// Disable completions
+	RootCmd.CompletionOptions.DisableDefaultCmd = true
 }

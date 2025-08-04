@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// debugCmd represents the prompt command
+// debugCmd represents the debug command
 var debugCmd = createDebugCmd()
 
 func init() {
@@ -32,16 +32,14 @@ func createDebugCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, _ []string) {
 			startTime := time.Now()
 
-			log.Enable()
-			log.Debug("debug mode enabled")
+			log.Enable(plain)
 
 			sh := os.Getenv("POSH_SHELL")
 
-			configFile := config.Path(configFlag)
-			cfg := config.Load(configFile, sh, false)
+			cfg, _ := config.Load(configFlag, sh, false)
 
 			flags := &runtime.Flags{
-				Config: configFile,
+				Config: cfg.Source,
 				Debug:  true,
 				PWD:    pwd,
 				Shell:  sh,
@@ -51,7 +49,7 @@ func createDebugCmd() *cobra.Command {
 			env := &runtime.Terminal{}
 			env.Init(flags)
 
-			template.Init(env, cfg.Var)
+			template.Init(env, cfg.Var, cfg.Maps)
 
 			defer func() {
 				template.SaveCache()

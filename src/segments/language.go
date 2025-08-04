@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	runtime_ "runtime"
 
+	"slices"
+
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
@@ -134,7 +136,7 @@ func (l *language) Enabled() bool {
 
 	if !enabled {
 		// set default mode when not set
-		if len(l.displayMode) == 0 {
+		if l.displayMode == "" {
 			l.displayMode = l.props.GetString(DisplayMode, DisplayModeFiles)
 		}
 
@@ -175,12 +177,7 @@ func (l *language) Enabled() bool {
 }
 
 func (l *language) hasLanguageFiles() bool {
-	for _, extension := range l.extensions {
-		if l.env.HasFiles(extension) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(l.extensions, l.env.HasFiles)
 }
 
 func (l *language) hasProjectFiles() bool {
@@ -195,12 +192,7 @@ func (l *language) hasProjectFiles() bool {
 }
 
 func (l *language) hasLanguageFolders() bool {
-	for _, folder := range l.folders {
-		if l.env.HasFolder(folder) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(l.folders, l.env.HasFolder)
 }
 
 // setVersion parses the version string returned by the command
@@ -222,12 +214,14 @@ func (l *language) setVersion() error {
 	for _, command := range l.commands {
 		versionStr, err := l.runCommand(command)
 		if err != nil {
+			log.Error(err)
 			lastError = err
 			continue
 		}
 
 		version, err := command.parse(versionStr)
 		if err != nil {
+			log.Error(err)
 			lastError = fmt.Errorf("err parsing info from %s with %s", command.executable, versionStr)
 			continue
 		}
@@ -238,7 +232,7 @@ func (l *language) setVersion() error {
 		}
 
 		l.buildVersionURL()
-		l.version.Executable = command.executable
+		l.Executable = command.executable
 
 		if marchalled, err := json.Marshal(l.version); err == nil {
 			duration := l.props.GetString(properties.CacheDuration, string(cache.NONE))
@@ -271,8 +265,12 @@ func (l *language) runCommand(command *cmd) (string, error) {
 	}
 
 	versionStr, err := command.getVersion()
-	if err != nil || versionStr == "" {
-		return "", errors.New("cannot get version")
+	if err != nil {
+		return "", err
+	}
+
+	if versionStr == "" {
+		return "", errors.New("no version found")
 	}
 
 	return versionStr, nil
@@ -294,32 +292,27 @@ func (l *language) inLanguageContext() bool {
 
 func (l *language) buildVersionURL() {
 	versionURLTemplate := l.props.GetString(properties.VersionURLTemplate, l.versionURLTemplate)
-	if len(versionURLTemplate) == 0 {
+	if versionURLTemplate == "" {
 		return
 	}
 
-	tmpl := &template.Text{
-		Template: versionURLTemplate,
-		Context:  l.version,
-	}
-
-	url, err := tmpl.Render()
+	url, err := template.Render(versionURLTemplate, l.version)
 	if err != nil {
 		return
 	}
 
-	l.version.URL = url
+	l.URL = url
 }
 
 func (l *language) hasNodePackage(name string) bool {
 	packageJSON := l.env.FileContent("package.json")
 
-	var packageData map[string]interface{}
+	var packageData map[string]any
 	if err := json.Unmarshal([]byte(packageJSON), &packageData); err != nil {
 		return false
 	}
 
-	dependencies, ok := packageData["dependencies"].(map[string]interface{})
+	dependencies, ok := packageData["dependencies"].(map[string]any)
 	if !ok {
 		return false
 	}

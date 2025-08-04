@@ -2,8 +2,10 @@ package prompt
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
@@ -72,6 +74,13 @@ func (e *Engine) writePrimaryPrompt(needsPrimaryRPrompt bool) {
 		if e.renderBlock(block, cancelNewline) {
 			didRender = true
 		}
+
+		if e.Config.ToolTipsAction.IsDefault() {
+			continue
+		}
+
+		e.Env.Session().Set(RPromptKey, e.rprompt, cache.INFINITE)
+		e.Env.Session().Set(RPromptLengthKey, strconv.Itoa(e.rpromptLength), cache.INFINITE)
 	}
 
 	if len(e.Config.ConsoleTitleTemplate) > 0 && !e.Env.Flags().Plain {

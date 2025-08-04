@@ -24,6 +24,8 @@ $global:_ompPoshGit = $false
 $global:_ompAzure = $false
 $global:_ompExecutable = ::OMP::
 
+$env:POSH_SESSION_ID = (& $global:_ompExecutable get uuid)
+
 New-Module -Name "oh-my-posh-core" -ScriptBlock {
     # Check `ConstrainedLanguage` mode.
     $script:ConstrainedLanguageMode = $ExecutionContext.SessionState.LanguageMode -eq "ConstrainedLanguage"
@@ -45,7 +47,6 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
     $env:POWERLINE_COMMAND = "oh-my-posh"
     $env:POSH_SHELL = "pwsh"
     $env:POSH_SHELL_VERSION = $script:PSVersion
-    $env:POSH_SESSION_ID = ::SESSION_ID::
     $env:CONDA_PROMPT_MODIFIER = $false
 
     # set the default theme
@@ -131,28 +132,6 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
         $terminalWidth
     }
 
-    function Get-FileHyperlink {
-        param(
-            [Parameter(Mandatory, ValuefromPipeline = $True)]
-            [string]$Uri,
-            [Parameter(ValuefromPipeline = $True)]
-            [string]$Name
-        )
-
-        if (!$Name) {
-            # if name not set, uri is used as the name of the hyperlink
-            $Name = $Uri
-        }
-
-        if ($null -ne $env:WSL_DISTRO_NAME) {
-            # wsl conversion if needed
-            $Uri = &wslpath -m $Uri
-        }
-
-        # return an ANSI formatted hyperlink
-        return "`e]8;;file://$Uri`e\$Name`e]8;;`e\"
-    }
-
     function Set-TransientPrompt {
         $previousOutputEncoding = [Console]::OutputEncoding
         try {
@@ -160,6 +139,7 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
             [Console]::OutputEncoding = [Text.Encoding]::UTF8
             [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
         }
+        catch [System.ArgumentOutOfRangeException] { }
         finally {
             [Console]::OutputEncoding = $previousOutputEncoding
         }
@@ -223,12 +203,13 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
 
         $invocationInfo = try {
             # retrieve info of the most recent error
-            $global:Error[0] | Where-Object { $_ -ne $null } | Select-Object -ExpandProperty InvocationInfo
+            $global:Error | Where-Object { $_.GetType().Name -eq 'ErrorRecord' } | Select-Object -First 1 -ExpandProperty InvocationInfo
         }
         catch { $null }
 
-        # check if the last command caused the last error
-        if ($null -ne $invocationInfo -and $lastHistory.CommandLine -eq $invocationInfo.Line) {
+        # Check if the error occurred in the current command scope
+        if ($null -ne $invocationInfo -and
+            $invocationInfo.HistoryId -eq $lastHistory.Id) {
             $script:ErrorCode = 1
             return
         }
@@ -407,125 +388,11 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
         Set-PSReadLineOption -PromptText $validLine, $errorLine
     }
 
-    <#
-    .SYNOPSIS
-        Exports the current oh-my-posh theme.
-    .DESCRIPTION
-        By default the config is exported in JSON to the clipboard.
-    .EXAMPLE
-        Export-PoshTheme
-
-        Exports the current theme in JSON to the clipboard.
-    .EXAMPLE
-        Export-PoshTheme -Format toml
-
-        Exports the current theme in TOML to the clipboard.
-    .EXAMPLE
-        Export-PoshTheme C:\temp\theme.yaml yaml
-
-        Exports the current theme in YAML to 'C:\temp\theme.yaml'.
-    .EXAMPLE
-        Export-PoshTheme ~\theme.toml toml
-
-        Exports the current theme in TOML to '$HOME\theme.toml'
-    #>
-    function Export-PoshTheme {
-        param(
-            [Parameter(Mandatory = $false)]
-            [string]
-            # The file path where the theme will be exported. If not provided, the config is copied to the clipboard by default.
-            $FilePath,
-            [Parameter(Mandatory = $false)]
-            [ValidateSet('json', 'yaml', 'toml')]
-            [string]
-            # The format of the theme.
-            $Format = 'json'
-        )
-
-        if ($FilePath) {
-            # https://stackoverflow.com/questions/3038337/powershell-resolve-path-that-might-not-exist
-            $FilePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath)
-        }
-
-        $output = Invoke-Utf8Posh @(
-            "config", "export"
-            "--format=$Format"
-            "--output=$FilePath"
-        )
-        if (!$output) {
-            Write-Host "Theme exported to $(Get-FileHyperlink $FilePath)."
-            return
-        }
-
-        # When no path is provided, copy the output to clipboard.
-        Set-Clipboard $output
-        Write-Host 'Theme copied to clipboard.'
-    }
-
-    function Get-PoshThemes {
-        param(
-            [Parameter(Mandatory = $false, HelpMessage = "The themes folder")]
-            [string]
-            $Path = $env:POSH_THEMES_PATH,
-            [switch]
-            [Parameter(Mandatory = $false, HelpMessage = "List themes path")]
-            $List
-        )
-
-        while (-not (Test-Path -LiteralPath $Path)) {
-            $Path = Read-Host 'Please enter the themes path'
-        }
-
-        $Path = (Resolve-Path -Path $Path).ProviderPath
-
-        $logo = @'
-   __  _____ _      ___  ___       ______         _      __
-  / / |  _  | |     |  \/  |       | ___ \       | |     \ \
- / /  | | | | |__   | .  . |_   _  | |_/ /__  ___| |__    \ \
-< <   | | | | '_ \  | |\/| | | | | |  __/ _ \/ __| '_ \    > >
- \ \  \ \_/ / | | | | |  | | |_| | | | | (_) \__ \ | | |  / /
-  \_\  \___/|_| |_| \_|  |_/\__, | \_|  \___/|___/_| |_| /_/
-                             __/ |
-                            |___/
-'@
-        Write-Host $logo
-        $themes = Get-ChildItem -Path "$Path/*" -Include '*.omp.json' | Sort-Object Name
-        if ($List -eq $true) {
-            $themes | Select-Object @{ Name = 'hyperlink'; Expression = { Get-FileHyperlink -Uri $_.FullName } } | Format-Table -HideTableHeaders
-        }
-        else {
-            $nonFSWD = Get-NonFSWD
-            $stackCount = Get-PoshStackCount
-            $terminalWidth = Get-TerminalWidth
-            $themes | ForEach-Object -Process {
-                Write-Host "Theme: $(Get-FileHyperlink -Uri $_.FullName -Name ($_.BaseName -replace '\.omp$', ''))`n"
-                Invoke-Utf8Posh @(
-                    "print", "primary"
-                    "--config=$($_.FullName)"
-                    "--shell=$script:ShellName"
-                    "--shell-version=$script:PSVersion"
-                    "--pswd=$nonFSWD"
-                    "--stack-count=$stackCount"
-                    "--terminal-width=$terminalWidth"
-                )
-                Write-Host "`n"
-            }
-        }
-        Write-Host @"
-
-Themes location: $(Get-FileHyperlink -Uri "$Path")
-
-To change your theme, adjust the init script in $PROFILE.
-Example:
-  oh-my-posh init pwsh --config '$((Join-Path $Path "jandedobbeleer.omp.json") -replace "'", "''")' | Invoke-Expression
-
-"@
-    }
-
     # perform cleanup on removal so a new initialization in current session works
     if (!$script:ConstrainedLanguageMode) {
         $ExecutionContext.SessionState.Module.OnRemove += {
-            Remove-Item Function:Get-PoshStackCount
+            Remove-Item Function:Get-PoshStackCount -ErrorAction SilentlyContinue
+
             $Function:prompt = $script:OriginalPromptFunction
 
             (Get-PSReadLineOption).ContinuationPrompt = $script:OriginalContinuationPrompt
@@ -550,8 +417,6 @@ Example:
         "Enable-PoshTooltips"
         "Enable-PoshTransientPrompt"
         "Enable-PoshLineError"
-        "Export-PoshTheme"
-        "Get-PoshThemes"
         "prompt"
     )
 } | Import-Module -Global
