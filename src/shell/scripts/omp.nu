@@ -6,7 +6,7 @@ if ($env.config? | is-not-empty) {
 $env.POWERLINE_COMMAND = 'oh-my-posh'
 $env.POSH_THEME = (echo ::CONFIG::)
 $env.PROMPT_INDICATOR = ""
-$env.POSH_SESSION_ID = (echo ::SESSION_ID::)
+$env.POSH_SESSION_ID = "::SESSION_ID::"
 $env.POSH_SHELL = "nu"
 $env.POSH_SHELL_VERSION = (version | get version)
 
@@ -40,6 +40,7 @@ def --wrapped _omp_get_prompt [
             $"--no-status=($no_status)"
             $"--execution-time=($execution_time)"
             $"--terminal-width=((term size).columns)"
+            $"--job-count=(job list | length)"
             ...$args
     )
 }

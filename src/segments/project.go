@@ -12,8 +12,8 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 
-	yaml "github.com/goccy/go-yaml"
 	toml "github.com/pelletier/go-toml/v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type ProjectItem struct {
@@ -115,16 +115,24 @@ func (n *Project) Enabled() bool {
 	}
 
 	for _, item := range n.projects {
-		if n.hasProjectFile(item) {
-			data := item.Fetcher(*item)
-			if data == nil {
-				continue
-			}
-			n.ProjectData = *data
-			n.ProjectData.Type = item.Name
-			return true
+		// allow files override
+		property := properties.Property(fmt.Sprintf("%s_files", item.Name))
+		item.Files = n.props.GetStringArray(property, item.Files)
+
+		if !n.hasProjectFile(item) {
+			continue
 		}
+
+		data := item.Fetcher(*item)
+		if data == nil {
+			continue
+		}
+
+		n.ProjectData = *data
+		n.Type = item.Name
+		return true
 	}
+
 	return n.props.GetBool(properties.AlwaysEnabled, false)
 }
 
@@ -133,12 +141,7 @@ func (n *Project) Template() string {
 }
 
 func (n *Project) hasProjectFile(p *ProjectItem) bool {
-	for _, file := range p.Files {
-		if n.env.HasFiles(file) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(p.Files, n.env.HasFiles)
 }
 
 func (n *Project) getNodePackage(item ProjectItem) *ProjectData {
@@ -228,13 +231,18 @@ func (n *Project) getNuSpecPackage(_ ProjectItem) *ProjectData {
 	}
 }
 
-func (n *Project) getDotnetProject(_ ProjectItem) *ProjectData {
+func (n *Project) getDotnetProject(item ProjectItem) *ProjectData {
 	var name string
 	var content string
 	var extension string
 
-	extensions := []string{".sln", ".slnf", ".csproj", ".fsproj", ".vbproj"}
 	files := n.env.LsDir(n.env.Pwd())
+
+	extensions := make([]string, len(item.Files))
+	for i, file := range item.Files {
+		// Remove leading * and keep only the extension
+		extensions[i] = strings.TrimPrefix(file, "*")
+	}
 
 	// get the first match only
 	for _, file := range files {
@@ -256,7 +264,7 @@ func (n *Project) getDotnetProject(_ ProjectItem) *ProjectData {
 		target = values["TFM"]
 	}
 
-	if len(target) == 0 {
+	if target == "" {
 		log.Error(fmt.Errorf("cannot extract TFM from %s project file", name))
 	}
 
@@ -278,14 +286,14 @@ func (n *Project) getPowerShellModuleData(_ ProjectItem) *ProjectData {
 		}
 	}
 
-	if len(content) == 0 {
+	if content == "" {
 		return nil
 	}
 
 	data := &ProjectData{}
-	lines := strings.Split(content, "\n")
+	lines := strings.SplitSeq(content, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		splitted := strings.SplitN(line, "=", 2)
 		if len(splitted) < 2 {
 			continue

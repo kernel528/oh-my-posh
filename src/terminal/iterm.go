@@ -3,9 +3,9 @@ package terminal
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
 
 type iTermFeature string
@@ -19,19 +19,14 @@ const (
 type ITermFeatures []iTermFeature
 
 func (f ITermFeatures) Contains(feature iTermFeature) bool {
-	for _, item := range f {
-		if item == feature {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(f, feature)
 }
 
 func RenderItermFeatures(features ITermFeatures, sh, pwd, user, host string) string {
 	supportedShells := []string{shell.BASH, shell.ZSH}
 
-	var result strings.Builder
+	result := text.NewBuilder()
+
 	for _, feature := range features {
 		switch feature {
 		case PromptMark:

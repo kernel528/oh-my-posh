@@ -39,7 +39,6 @@ module.exports = {
         "configuration/general",
         "configuration/block",
         "configuration/segment",
-        "configuration/sample",
         "configuration/title",
         "configuration/colors",
         "configuration/templates",
@@ -48,6 +47,7 @@ module.exports = {
         "configuration/transient",
         "configuration/line-error",
         "configuration/tooltips",
+        "configuration/sample",
       ],
     },
     {
@@ -137,6 +137,7 @@ module.exports = {
             "segments/languages/kotlin",
             "segments/languages/lua",
             "segments/languages/mojo",
+            "segments/languages/nim",
             "segments/languages/node",
             "segments/languages/ocaml",
             "segments/languages/perl",
@@ -146,6 +147,7 @@ module.exports = {
             "segments/languages/ruby",
             "segments/languages/rust",
             "segments/languages/swift",
+            "segments/languages/v",
             "segments/languages/vala",
             "segments/languages/zig",
           ]
@@ -167,6 +169,7 @@ module.exports = {
           items: [
             "segments/scm/fossil",
             "segments/scm/git",
+            "segments/scm/jujutsu",
             "segments/scm/mercurial",
             "segments/scm/plastic",
             "segments/scm/sapling",
@@ -204,6 +207,7 @@ module.exports = {
             "segments/web/brewfather",
             "segments/web/carbonintensity",
             "segments/web/ipify",
+            "segments/web/http",
             "segments/web/nba",
             "segments/web/owm",
             "segments/web/wakatime",

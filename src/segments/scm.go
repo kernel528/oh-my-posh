@@ -2,11 +2,15 @@ package segments
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 	"strings"
-	"unicode/utf8"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
 
 const (
@@ -45,7 +49,7 @@ func (s *ScmStatus) Changed() bool {
 }
 
 func (s *ScmStatus) String() string {
-	var status strings.Builder
+	status := text.NewBuilder()
 
 	if s.Formats == nil {
 		s.Formats = make(map[string]string)
@@ -94,51 +98,79 @@ type scm struct {
 }
 
 const (
-	// BranchMaxLength truncates the length of the branch name
-	BranchMaxLength properties.Property = "branch_max_length"
-	// TruncateSymbol appends the set symbol to a truncated branch name
-	TruncateSymbol properties.Property = "truncate_symbol"
-	// FullBranchPath displays the full path of a branch
-	FullBranchPath properties.Property = "full_branch_path"
+	// BranchTemplate allows to specify a template for the branch name
+	BranchTemplate properties.Property = "branch_template"
 )
+
+func (s *scm) RelativeDir() string {
+	if s.repoRootDir == "" {
+		return ""
+	}
+
+	pwd := s.env.Pwd()
+	log.Debug("repo root dir:", s.repoRootDir, "pwd:", pwd)
+
+	rel, err := filepath.Rel(s.repoRootDir, pwd)
+	if err != nil {
+		log.Error(err)
+	}
+
+	if rel == "." || rel == "" {
+		log.Debug("repo root dir is the same as the current working directory, returning empty string")
+		return ""
+	}
+
+	return rel
+}
 
 func (s *scm) formatBranch(branch string) string {
 	mappedBranches := s.props.GetKeyValueMap(MappedBranches, make(map[string]string))
-	for key, value := range mappedBranches {
-		matchSubFolders := strings.HasSuffix(key, "*")
 
-		if matchSubFolders && len(key) > 1 {
-			key = key[0 : len(key)-1] // remove trailing /* or \*
+	// sort the keys alphabetically
+	keys := make([]string, 0, len(mappedBranches))
+	for k := range mappedBranches {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	const wildcard = "*"
+
+	for _, key := range keys {
+		if key == wildcard {
+			branch = mappedBranches[key]
+			break
 		}
 
-		if !strings.HasPrefix(branch, key) {
+		matchSubFolders := strings.HasSuffix(key, wildcard)
+		subfolderKey := strings.TrimSuffix(key, wildcard)
+
+		if matchSubFolders && strings.HasPrefix(branch, subfolderKey) {
+			branch = strings.Replace(branch, subfolderKey, mappedBranches[key], 1)
+			break
+		}
+
+		if matchSubFolders || branch != key {
 			continue
 		}
 
-		branch = strings.Replace(branch, key, value, 1)
+		branch = strings.Replace(branch, key, mappedBranches[key], 1)
 		break
 	}
 
-	fullBranchPath := s.props.GetBool(FullBranchPath, true)
-	if !fullBranchPath && strings.Contains(branch, "/") {
-		index := strings.LastIndex(branch, "/")
-		branch = branch[index+1:]
-	}
-
-	maxLength := s.props.GetInt(BranchMaxLength, 0)
-	if maxLength == 0 || len(branch) <= maxLength {
+	branchTemplate := s.props.GetString(BranchTemplate, "")
+	if branchTemplate == "" {
 		return branch
 	}
 
-	truncateSymbol := s.props.GetString(TruncateSymbol, "")
-	lenTruncateSymbol := utf8.RuneCountInString(truncateSymbol)
-	maxLength -= lenTruncateSymbol
+	txt, err := template.Render(branchTemplate, struct{ Branch string }{Branch: branch})
+	if err != nil {
+		return branch
+	}
 
-	runes := []rune(branch)
-	return string(runes[0:maxLength]) + truncateSymbol
+	return txt
 }
 
-func (s *scm) FileContents(folder, file string) string {
+func (s *scm) fileContent(folder, file string) string {
 	return strings.Trim(s.env.FileContent(folder+"/"+file), " \r\n")
 }
 

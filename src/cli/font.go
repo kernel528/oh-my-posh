@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/font"
+	"github.com/jandedobbeleer/oh-my-posh/src/cli/font"
+	"github.com/jandedobbeleer/oh-my-posh/src/dsc"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 
@@ -52,7 +54,22 @@ This command is used to install fonts and configure the font in your terminal.
 					zipFolder += "/"
 				}
 
-				font.Run(fontName, env.Cache(), env.Root(), zipFolder)
+				fontName, err := font.Run(fontName, env.Cache(), zipFolder)
+				if err != nil {
+					log.Error(err)
+					exitcode = 70
+					return
+				}
+
+				if env.Root() {
+					// do not update the DSC cache if we are running as root
+					return
+				}
+
+				fontDSC := font.DSC()
+				fontDSC.Load(env.Cache())
+				fontDSC.Add(fontName)
+				fontDSC.Save()
 
 				return
 			case "configure":
@@ -66,5 +83,6 @@ This command is used to install fonts and configure the font in your terminal.
 
 func init() {
 	fontCmd.Flags().StringVar(&zipFolder, "zip-folder", "", "the folder inside the zip file to install fonts from")
+	fontCmd.AddCommand(dsc.Command(font.DSC()))
 	RootCmd.AddCommand(fontCmd)
 }

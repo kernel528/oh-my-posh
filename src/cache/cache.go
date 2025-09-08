@@ -3,10 +3,10 @@ package cache
 import (
 	"fmt"
 	"os"
-	"strconv"
+	"sync"
 	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/log"
+	"github.com/google/uuid"
 )
 
 type Cache interface {
@@ -23,24 +23,28 @@ type Cache interface {
 	Delete(key string)
 }
 
-type Context interface {
-	CacheKey() (string, bool)
-}
-
 const (
 	FileName = "omp.cache"
 )
 
-var SessionFileName = fmt.Sprintf("%s.%s", FileName, sessionID())
+var (
+	sessionID string
+	once      sync.Once
+)
 
-func sessionID() string {
-	pid := os.Getenv("POSH_SESSION_ID")
-	if len(pid) == 0 {
-		log.Debug("POSH_SESSION_ID not set, using PID")
-		pid = strconv.Itoa(os.Getppid())
-	}
+func SessionID() string {
+	once.Do(func() {
+		sessionID = os.Getenv("POSH_SESSION_ID")
+		if sessionID == "" {
+			sessionID = uuid.NewString()
+		}
+	})
 
-	return pid
+	return sessionID
+}
+
+func SessionFileName() string {
+	return fmt.Sprintf("%s.%s", FileName, SessionID())
 }
 
 const (

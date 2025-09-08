@@ -124,13 +124,13 @@ func (sl *Sapling) setHeadContext() {
 	}
 
 	changes := sl.getSaplingCommandOutput("status")
-	if len(changes) == 0 {
+	if changes == "" {
 		return
 	}
-	lines := strings.Split(changes, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(changes, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
-		if len(line) == 0 {
+		if line == "" {
 			continue
 		}
 		// element is the element from someSlice for where we are
@@ -140,12 +140,12 @@ func (sl *Sapling) setHeadContext() {
 
 func (sl *Sapling) setCommitContext() {
 	body := sl.getSaplingCommandOutput("log", "--limit", "1", "--template", SLCOMMITTEMPLATE)
-	if len(body) == 0 {
+	if body == "" {
 		sl.New = true
 		return
 	}
-	splitted := strings.Split(strings.TrimSpace(body), "\n")
-	for _, line := range splitted {
+	splitted := strings.SplitSeq(strings.TrimSpace(body), "\n")
+	for line := range splitted {
 		line = strings.TrimSpace(line)
 		if len(line) <= 3 {
 			continue

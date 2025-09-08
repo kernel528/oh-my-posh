@@ -55,7 +55,7 @@ This command is used to get the value of the following variables:
 
 		switch args[0] {
 		case "shell":
-			fmt.Println(env.Shell())
+			fmt.Print(env.Shell())
 		case "accent":
 			rgb, err := color.GetAccentColor(env)
 			if err != nil {
@@ -63,17 +63,20 @@ This command is used to get the value of the following variables:
 				return
 			}
 			accent := color2.RGB(rgb.R, rgb.G, rgb.B)
-			fmt.Println("#" + accent.Hex())
+			fmt.Print("#" + accent.Hex())
 		case "toggles":
-			togglesCache, _ := env.Session().Get(cache.TOGGLECACHE)
 			var toggles []string
+
+			togglesCache, _ := env.Session().Get(cache.TOGGLECACHE)
 			if len(togglesCache) != 0 {
 				toggles = strings.Split(togglesCache, ",")
 			}
+
 			if len(toggles) == 0 {
 				fmt.Println("No segments are toggled off")
 				return
 			}
+
 			fmt.Println("Toggled off segments:")
 			for _, toggle := range toggles {
 				fmt.Println("- " + toggle)
@@ -84,7 +87,8 @@ This command is used to get the value of the following variables:
 				fmt.Println("error getting terminal width:", err.Error())
 				return
 			}
-			fmt.Println(width)
+
+			fmt.Print(width)
 		default:
 			_ = cmd.Help()
 		}

@@ -6,9 +6,9 @@ import (
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
 	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache/mock"
+	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/upgrade"
 
 	"github.com/alecthomas/assert"
 	testify_ "github.com/stretchr/testify/mock"
@@ -16,7 +16,7 @@ import (
 
 func TestUpgrade(t *testing.T) {
 	ugc := &upgrade.Config{}
-	latest, _ := ugc.Latest()
+	latest, _ := ugc.FetchLatest()
 
 	cases := []struct {
 		Case            string
@@ -66,7 +66,7 @@ func TestUpgrade(t *testing.T) {
 		cache := &cache_.Cache{}
 
 		env.On("Cache").Return(cache)
-		if len(tc.CachedVersion) == 0 {
+		if tc.CachedVersion == "" {
 			tc.CachedVersion = tc.CurrentVersion
 		}
 

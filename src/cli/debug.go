@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
@@ -17,8 +16,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// debugCmd represents the prompt command
-var debugCmd = createDebugCmd()
+// debugCmd represents the debug command
+var (
+	debugCmd  = createDebugCmd()
+	startTime = time.Now()
+)
 
 func init() {
 	RootCmd.AddCommand(debugCmd)
@@ -32,26 +34,22 @@ func createDebugCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, _ []string) {
 			startTime := time.Now()
 
-			log.Enable()
-			log.Debug("debug mode enabled")
-
-			sh := os.Getenv("POSH_SHELL")
-
-			configFile := config.Path(configFlag)
-			cfg := config.Load(configFile, sh, false)
+			log.Enable(plain)
 
 			flags := &runtime.Flags{
-				Config: configFile,
-				Debug:  true,
-				PWD:    pwd,
-				Shell:  sh,
-				Plain:  plain,
+				Debug: true,
+				PWD:   pwd,
+				Shell: shell.GENERIC,
+				Plain: plain,
 			}
 
 			env := &runtime.Terminal{}
 			env.Init(flags)
 
-			template.Init(env, cfg.Var)
+			_, reload := env.Cache().Get(config.RELOAD)
+			cfg := config.Get(env.Session(), configFlag, reload)
+
+			template.Init(env, cfg.Var, cfg.Maps)
 
 			defer func() {
 				template.SaveCache()

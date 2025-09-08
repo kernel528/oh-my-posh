@@ -8,6 +8,10 @@ on:
       - '.github/*.md'
       - '.github/FUNDING.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 name: Build Code
 jobs:
   build:
@@ -17,18 +21,18 @@ jobs:
         shell: pwsh
     steps:
     - name: Checkout code 👋
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
     - name: Install Go 🗳
       uses: ./.github/workflows/composite/bootstrap-go
     - name: Run GoReleaser 🚀
-      uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf
+      uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a
       with:
         distribution: goreleaser
         version: v2.3.2
         args: build --clean --snapshot --skip=post-hooks --skip=before
         workdir: src
     - name: Archive production artifacts
-      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: builds
         retention-days: 1

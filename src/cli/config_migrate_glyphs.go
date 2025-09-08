@@ -5,12 +5,11 @@ import (
 
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
-	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 
 	"github.com/spf13/cobra"
 )
 
-// migrateCmd represents the migrate command
+// migrateGlyphsCmd represents the glyphs command
 var migrateGlyphsCmd = &cobra.Command{
 	Use:   "glyphs",
 	Short: "Migrate the nerd font glyphs in your config",
@@ -35,11 +34,10 @@ Migrates the ~/myconfig.omp.json config file's glyphs and writes the result to y
 A backup of the current config can be found at ~/myconfig.omp.json.bak.`,
 	Args: cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		configFile := config.Path(configFlag)
-		cfg := config.Load(configFile, shell.GENERIC, false)
+		cfg, _ := config.Load(configFlag, false)
 
 		flags := &runtime.Flags{
-			Config: configFile,
+			Config: cfg.Source,
 		}
 
 		env := &runtime.Terminal{}
@@ -47,7 +45,7 @@ A backup of the current config can be found at ~/myconfig.omp.json.bak.`,
 		defer env.Close()
 
 		cfg.MigrateGlyphs = true
-		if len(format) == 0 {
+		if format == "" {
 			format = cfg.Format
 		}
 

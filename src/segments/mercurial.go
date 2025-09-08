@@ -103,7 +103,7 @@ func (hg *Mercurial) setMercurialStatus() {
 	hg.Branch = hg.command
 
 	idString := hg.getHgCommandOutput("log", "-r", ".", "--template", hgLogTemplate)
-	if len(idString) == 0 {
+	if idString == "" {
 		return
 	}
 
@@ -139,19 +139,19 @@ func (hg *Mercurial) setMercurialStatus() {
 
 	statusString := hg.getHgCommandOutput("status")
 
-	if len(statusString) == 0 {
+	if statusString == "" {
 		return
 	}
 
-	statusLines := strings.Split(statusString, "\n")
+	statusLines := strings.SplitSeq(statusString, "\n")
 
-	for _, status := range statusLines {
+	for status := range statusLines {
 		hg.Working.add(status[:1])
 	}
 }
 
 func doSplit(s string) []string {
-	if len(s) == 0 {
+	if s == "" {
 		return []string{}
 	}
 

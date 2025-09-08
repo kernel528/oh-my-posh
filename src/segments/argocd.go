@@ -13,7 +13,6 @@ import (
 
 const (
 	argocdOptsEnv     = "ARGOCD_OPTS"
-	argocdInvalidFlag = "invalid flag"
 	argocdInvalidYaml = "invalid yaml"
 	argocdNoCurrent   = "no current context"
 
@@ -77,7 +76,7 @@ func (a *Argocd) getConfigFromOpts() string {
 func (a *Argocd) parseConfig(file string) (bool, error) {
 	config := a.env.FileContent(file)
 	// missing or empty file content
-	if len(config) == 0 {
+	if config == "" {
 		return false, errors.New(argocdInvalidYaml)
 	}
 
@@ -91,7 +90,7 @@ func (a *Argocd) parseConfig(file string) (bool, error) {
 	for _, context := range data.Contexts {
 		if context.Name == a.Name {
 			// mandatory fields in yaml
-			if len(context.Server) == 0 || len(context.User) == 0 {
+			if context.Server == "" || context.User == "" {
 				return false, errors.New(argocdInvalidYaml)
 			}
 			a.Server = context.Server
