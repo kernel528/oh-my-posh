@@ -43,7 +43,7 @@
           "properties": {
             "cache_duration": "none"
           },
-          "template": "<cyan>{{ .UserName }}</> <darkGray>@</> <green>{{ .HostName }}</> ",
+          "template": "<cyan>{{ .UserName }}</><darkGray> @ </><green>{{ .HostName }}</> ",
           "type": "session",
           "style": "plain"
         },

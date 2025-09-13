@@ -20,8 +20,13 @@ const (
 	YAML string = "yaml"
 	TOML string = "toml"
 
+	TML   string = "tml"
+	YML   string = "yml"
+	JSONC string = "jsonc"
+
 	AUTOUPGRADE   = "upgrade"
 	UPGRADENOTICE = "notice"
+	RELOAD        = "reload"
 
 	Version = 3
 )
@@ -118,6 +123,11 @@ func (cfg *Config) Features(env runtime.Environment) shell.Features {
 	if cfg.TransientPrompt != nil {
 		log.Debug("transient prompt enabled")
 		feats |= shell.Transient
+	}
+
+	unsupportedShells := []string{shell.ELVISH, shell.XONSH}
+	if slices.Contains(unsupportedShells, env.Shell()) {
+		cfg.ShellIntegration = false
 	}
 
 	if cfg.ShellIntegration {

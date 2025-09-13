@@ -24,9 +24,9 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/http"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 
-	disk "github.com/shirou/gopsutil/v3/disk"
-	load "github.com/shirou/gopsutil/v3/load"
-	process "github.com/shirou/gopsutil/v3/process"
+	disk "github.com/shirou/gopsutil/v4/disk"
+	load "github.com/shirou/gopsutil/v4/load"
+	process "github.com/shirou/gopsutil/v4/process"
 )
 
 type Terminal struct {
@@ -58,9 +58,7 @@ func (term *Terminal) Init(flags *Flags) {
 	}
 
 	term.deviceCache = initCache(cache.FileName)
-	if fileName, err := cache.SessionFileName(); err == nil {
-		term.sessionCache = initCache(fileName)
-	}
+	term.sessionCache = initCache(cache.SessionFileName())
 
 	term.setPromptCount()
 

@@ -7,7 +7,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"runtime"
+	runtimelib "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +18,6 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
-	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 
 	json "github.com/goccy/go-json"
 	toml "github.com/pelletier/go-toml/v2"
@@ -29,8 +28,10 @@ const (
 	defaultHash = "default"
 )
 
-// Load returns the default configuration including possible user overrides
-func Load(configFile, sh string, migrate bool) (*Config, string) {
+// custom no config error
+var ErrNoConfig = errors.New("no config file specified")
+
+func Load(configFile string, migrate bool) (*Config, string) {
 	defer log.Trace(time.Now())
 
 	configFile, err := filePath(configFile)
@@ -47,6 +48,10 @@ func Load(configFile, sh string, migrate bool) (*Config, string) {
 		cfg.BackupAndMigrate()
 	}
 
+	cfg.Source = configFile
+
+	processExtendedConfig(cfg, hash)
+
 	if cfg.Upgrade == nil {
 		cfg.Upgrade = &upgrade.Config{
 			Source:        upgrade.CDN,
@@ -60,36 +65,8 @@ func Load(configFile, sh string, migrate bool) (*Config, string) {
 		cfg.Upgrade.Interval = cache.ONEWEEK
 	}
 
-	cfg.Source = configFile
-
-	if cfg.extended {
-		fileName := fmt.Sprintf("%s.omp.json", hash)
-		cfg.Source = filepath.Join(cache.Path(), fileName)
-		cfg.Write(JSON)
-	}
-
-	if !cfg.ShellIntegration {
-		return cfg, hash
-	}
-
-	// bash  - ok
-	// fish  - ok
-	// pwsh  - ok
-	// zsh   - ok
-	// cmd   - ok, as of v1.4.25 (chrisant996/clink#457, fixed in chrisant996/clink@8a5d7ea)
-	// nu    - built-in (and bugged) feature - nushell/nushell#5585, https://www.nushell.sh/blog/2022-08-16-nushell-0_67.html#shell-integration-fdncred-and-tyriar
-	// elv   - broken OSC sequences
-	// xonsh - broken OSC sequences
-	switch sh {
-	case shell.ELVISH, shell.XONSH, shell.NU:
-		cfg.ShellIntegration = false
-	}
-
 	return cfg, hash
 }
-
-// custom no config error
-var ErrNoConfig = errors.New("no config file specified")
 
 func filePath(config string) (string, error) {
 	defer log.Trace(time.Now())
@@ -97,9 +74,9 @@ func filePath(config string) (string, error) {
 	// if the config flag is set, we'll use that over POSH_THEME
 	// in our internal shell logic, we'll always use the POSH_THEME
 	// due to not using --config to set the configuration
-	hasConfig := len(config) > 0
+	hasConfig := config != ""
 
-	if poshTheme := os.Getenv("POSH_THEME"); len(poshTheme) > 0 && !hasConfig {
+	if poshTheme := os.Getenv("POSH_THEME"); poshTheme != "" && !hasConfig {
 		log.Debug("config set using POSH_THEME:", poshTheme)
 		return poshTheme, nil
 	}
@@ -121,10 +98,6 @@ func filePath(config string) (string, error) {
 		}
 
 		return filePath, nil
-	}
-
-	isCygwin := func() bool {
-		return runtime.GOOS == "windows" && len(os.Getenv("OSTYPE")) > 0
 	}
 
 	// Cygwin path always needs the full path as we're on Windows but not really.
@@ -164,10 +137,10 @@ func readConfig(configFile string) (*Config, string) {
 	}
 
 	switch cfg.Format {
-	case "yml", "yaml":
+	case YAML, YML:
 		cfg.Format = YAML
 		err = yaml.Unmarshal(data, &cfg)
-	case "jsonc", "json":
+	case JSONC, JSON:
 		cfg.Format = JSON
 
 		str := jsonutil.StripComments(string(data))
@@ -175,7 +148,7 @@ func readConfig(configFile string) (*Config, string) {
 
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		err = decoder.Decode(&cfg)
-	case "toml", "tml":
+	case TOML, TML:
 		cfg.Format = TOML
 		err = toml.Unmarshal(data, &cfg)
 	default:
@@ -188,9 +161,9 @@ func readConfig(configFile string) (*Config, string) {
 	}
 
 	// Calculate FNV-1a hash of the raw config data
-	data = append(data, []byte(configFile)...) // Include the file path in the hash to enable file modification detection
 	hasher := fnv.New64a()
 	hasher.Write(data)
+	hasher.Write([]byte(configFile)) // Include the file path in the hash to enable file modification detection
 	hash := strconv.FormatUint(hasher.Sum64(), 16)
 
 	if cfg.Extends == "" {
@@ -210,6 +183,22 @@ func readConfig(configFile string) (*Config, string) {
 	}
 
 	return base, fmt.Sprintf("%s.%s", hash, baseHash)
+}
+
+// isCygwin checks if we're running in Cygwin environment
+func isCygwin() bool {
+	return runtimelib.GOOS == "windows" && len(os.Getenv("OSTYPE")) > 0
+}
+
+// processExtendedConfig writes extended config to cache if needed
+func processExtendedConfig(cfg *Config, hash string) {
+	if !cfg.extended {
+		return
+	}
+
+	fileName := fmt.Sprintf("%s.omp.json", hash)
+	cfg.Source = filepath.Join(cache.Path(), fileName)
+	cfg.Write(JSON)
 }
 
 func isTheme(config string) (string, bool) {

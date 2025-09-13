@@ -3262,7 +3262,26 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/1149213?v=4",
       "profile": "https://github.com/RichLewis007",
       "contributions": [
-        "doc"
+        "doc",
+        "design"
+      ]
+    },
+    {
+      "login": "Gijsreyn",
+      "name": "Gijs Reijn",
+      "avatar_url": "https://avatars.githubusercontent.com/u/26114636?v=4",
+      "profile": "https://gijsreijn.medium.com/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "mikelolasagasti",
+      "name": "Mikel Olasagasti Uranga",
+      "avatar_url": "https://avatars.githubusercontent.com/u/773148?v=4",
+      "profile": "https://mikel.olasagasti.info",
+      "contributions": [
+        "code"
       ]
     }
   ],
