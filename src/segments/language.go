@@ -29,7 +29,7 @@ type inContext func() bool
 type getVersion func() (string, error)
 type matchesVersionFile func() (string, bool)
 
-type version struct {
+type Version struct {
 	Full          string
 	Major         string
 	Minor         string
@@ -49,13 +49,13 @@ type cmd struct {
 	args               []string
 }
 
-func (c *cmd) parse(versionInfo string) (*version, error) {
+func (c *cmd) parse(versionInfo string) (*Version, error) {
 	values := regex.FindNamedRegexMatch(c.regex, versionInfo)
 	if len(values) == 0 {
 		return nil, errors.New("cannot parse version string")
 	}
 
-	version := &version{
+	version := &Version{
 		Full:          values["version"],
 		Major:         values["major"],
 		Minor:         values["minor"],
@@ -66,14 +66,14 @@ func (c *cmd) parse(versionInfo string) (*version, error) {
 	return version, nil
 }
 
-type language struct {
-	base
+type Language struct {
+	Base
 
 	projectRoot        *runtime.FileInfo
 	loadContext        loadContext
 	inContext          inContext
 	matchesVersionFile matchesVersionFile
-	version
+	Version
 	displayMode        string
 	Error              string
 	versionURLTemplate string
@@ -108,13 +108,13 @@ const (
 	LanguageFolders properties.Property = "folders"
 )
 
-func (l *language) getName() string {
+func (l *Language) getName() string {
 	_, file, _, _ := runtime_.Caller(2)
 	base := filepath.Base(file)
 	return base[:len(base)-3]
 }
 
-func (l *language) Enabled() bool {
+func (l *Language) Enabled() bool {
 	l.name = l.getName()
 	// override default extensions if needed
 	l.extensions = l.props.GetStringArray(LanguageExtensions, l.extensions)
@@ -176,11 +176,11 @@ func (l *language) Enabled() bool {
 	return enabled
 }
 
-func (l *language) hasLanguageFiles() bool {
+func (l *Language) hasLanguageFiles() bool {
 	return slices.ContainsFunc(l.extensions, l.env.HasFiles)
 }
 
-func (l *language) hasProjectFiles() bool {
+func (l *Language) hasProjectFiles() bool {
 	for _, extension := range l.projectFiles {
 		if configPath, err := l.env.HasParentFilePath(extension, false); err == nil {
 			l.projectRoot = configPath
@@ -191,24 +191,19 @@ func (l *language) hasProjectFiles() bool {
 	return false
 }
 
-func (l *language) hasLanguageFolders() bool {
+func (l *Language) hasLanguageFolders() bool {
 	return slices.ContainsFunc(l.folders, l.env.HasFolder)
 }
 
 // setVersion parses the version string returned by the command
-func (l *language) setVersion() error {
+func (l *Language) setVersion() error {
 	var lastError error
 
 	cacheKey := fmt.Sprintf("version_%s", l.name)
 
-	if versionCache, OK := l.env.Cache().Get(cacheKey); OK {
-		var version version
-		err := json.Unmarshal([]byte(versionCache), &version)
-		if err == nil {
-			log.Debugf("version cache restored for %s: %s", l.name, version)
-			l.version = version
-			return nil
-		}
+	if versionCache, OK := cache.Get[Version](cache.Device, cacheKey); OK {
+		l.Version = versionCache
+		return nil
 	}
 
 	for _, command := range l.commands {
@@ -226,7 +221,7 @@ func (l *language) setVersion() error {
 			continue
 		}
 
-		l.version = *version
+		l.Version = *version
 		if command.versionURLTemplate != "" {
 			l.versionURLTemplate = command.versionURLTemplate
 		}
@@ -234,10 +229,8 @@ func (l *language) setVersion() error {
 		l.buildVersionURL()
 		l.Executable = command.executable
 
-		if marchalled, err := json.Marshal(l.version); err == nil {
-			duration := l.props.GetString(properties.CacheDuration, string(cache.NONE))
-			l.env.Cache().Set(cacheKey, string(marchalled), cache.Duration(duration))
-		}
+		duration := l.props.GetString(properties.CacheDuration, string(cache.NONE))
+		cache.Set(cache.Device, cacheKey, l.Version, cache.Duration(duration))
 
 		return nil
 	}
@@ -249,7 +242,7 @@ func (l *language) setVersion() error {
 	return errors.New(l.props.GetString(MissingCommandText, ""))
 }
 
-func (l *language) runCommand(command *cmd) (string, error) {
+func (l *Language) runCommand(command *cmd) (string, error) {
 	if command.getVersion == nil {
 		if !l.env.HasCommand(command.executable) {
 			return "", errors.New(noVersion)
@@ -276,27 +269,27 @@ func (l *language) runCommand(command *cmd) (string, error) {
 	return versionStr, nil
 }
 
-func (l *language) loadLanguageContext() {
+func (l *Language) loadLanguageContext() {
 	if l.loadContext == nil {
 		return
 	}
 	l.loadContext()
 }
 
-func (l *language) inLanguageContext() bool {
+func (l *Language) inLanguageContext() bool {
 	if l.inContext == nil {
 		return false
 	}
 	return l.inContext()
 }
 
-func (l *language) buildVersionURL() {
+func (l *Language) buildVersionURL() {
 	versionURLTemplate := l.props.GetString(properties.VersionURLTemplate, l.versionURLTemplate)
 	if versionURLTemplate == "" {
 		return
 	}
 
-	url, err := template.Render(versionURLTemplate, l.version)
+	url, err := template.Render(versionURLTemplate, l.Version)
 	if err != nil {
 		return
 	}
@@ -304,7 +297,7 @@ func (l *language) buildVersionURL() {
 	l.URL = url
 }
 
-func (l *language) hasNodePackage(name string) bool {
+func (l *Language) hasNodePackage(name string) bool {
 	packageJSON := l.env.FileContent("package.json")
 
 	var packageData map[string]any
@@ -324,7 +317,7 @@ func (l *language) hasNodePackage(name string) bool {
 	return true
 }
 
-func (l *language) nodePackageVersion(name string) (string, error) {
+func (l *Language) nodePackageVersion(name string) (string, error) {
 	folder := filepath.Join(l.env.Pwd(), "node_modules", name)
 
 	const fileName string = "package.json"

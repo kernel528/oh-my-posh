@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/font"
 	"github.com/jandedobbeleer/oh-my-posh/src/dsc"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
@@ -40,21 +41,24 @@ This command is used to install fonts and configure the font in your terminal.
 					fontName = args[1]
 				}
 
-				flags := &runtime.Flags{
-					SaveCache: true,
-				}
-
 				env := &runtime.Terminal{}
-				env.Init(flags)
-				defer env.Close()
+				env.Init(&runtime.Flags{})
 
-				terminal.Init(env.Shell())
+				sh := env.Shell()
+
+				cache.Init(sh, cache.Persist)
+
+				defer func() {
+					cache.Close()
+				}()
+
+				terminal.Init(sh)
 
 				if !strings.HasPrefix(zipFolder, "/") {
 					zipFolder += "/"
 				}
 
-				fontName, err := font.Run(fontName, env.Cache(), zipFolder)
+				fontName, err := font.Run(fontName, zipFolder)
 				if err != nil {
 					log.Error(err)
 					exitcode = 70
@@ -67,7 +71,7 @@ This command is used to install fonts and configure the font in your terminal.
 				}
 
 				fontDSC := font.DSC()
-				fontDSC.Load(env.Cache())
+				fontDSC.Load()
 				fontDSC.Add(fontName)
 				fontDSC.Save()
 

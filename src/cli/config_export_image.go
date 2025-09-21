@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/image"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/prompt"
@@ -48,10 +50,19 @@ Exports the config to an image file ~/mytheme.png.
 Exports the config to an image file using customized output settings.`,
 	Args: cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		cfg, _ := config.Load(configFlag, false)
+		cache.Init(os.Getenv("POSH_SHELL"))
+
+		err := setConfigFlag()
+		if err != nil {
+			exitcode = 666
+			fmt.Println(err.Error())
+			return
+		}
+
+		cfg := config.Load(configFlag, false)
 
 		flags := &runtime.Flags{
-			Config:        cfg.Source,
+			ConfigPath:    cfg.Source,
 			Shell:         shell.GENERIC,
 			TerminalWidth: 120,
 		}
@@ -63,12 +74,13 @@ Exports the config to an image file using customized output settings.`,
 
 		defer func() {
 			template.SaveCache()
-			env.Close()
+			cache.Close()
 		}()
 
 		// set sane defaults for things we don't print
 		cfg.ConsoleTitleTemplate = ""
 		cfg.PWD = ""
+		cfg.ShellIntegration = false
 
 		terminal.Init(shell.GENERIC)
 		terminal.BackgroundColor = cfg.TerminalBackground.ResolveTemplate()
@@ -131,4 +143,18 @@ func init() {
 	_ = imageCmd.Flags().MarkHidden("background-color")
 
 	exportCmd.AddCommand(imageCmd)
+}
+
+func setConfigFlag() error {
+	if configFlag != "" {
+		return nil
+	}
+
+	configPath, OK := cache.Get[string](cache.Session, config.SourceKey)
+	if !OK {
+		return fmt.Errorf("no config found in session cache, please provide a config using the --config flag")
+	}
+
+	configFlag = configPath
+	return nil
 }

@@ -69,7 +69,6 @@ local omp_executable = '::OMP::'
 
 -- Configuration
 
-os.setenv('POSH_THEME', '::CONFIG::')
 os.setenv('POSH_SHELL_VERSION', string.format('clink v%s.%s.%s.%s', clink.version_major, clink.version_minor, clink.version_patch, clink.version_commit))
 
 -- Execution helpers
@@ -109,10 +108,6 @@ local function run_posh_command(command)
     end
     return output
 end
-
--- SESSION ID
-
-os.setenv('POSH_SESSION_ID', '::SESSION_ID::')
 
 -- Duration functions
 

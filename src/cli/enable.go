@@ -2,11 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
-	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -44,24 +44,12 @@ func init() {
 }
 
 func toggleFeature(cmd *cobra.Command, feature string, enable bool) {
-	flags := &runtime.Flags{
-		Shell:     shellName,
-		SaveCache: true,
-	}
-
-	env := &runtime.Terminal{}
-	env.Init(flags)
-	defer env.Close()
-
 	if feature == "" {
 		_ = cmd.Help()
 		return
 	}
 
-	if enable {
-		env.Cache().Set(feature, "true", cache.INFINITE)
-		return
-	}
-
-	env.Cache().Delete(feature)
+	cache.Init(os.Getenv("POSH_SHELL"), cache.Persist)
+	cache.Set(cache.Device, feature, enable, cache.INFINITE)
+	cache.Close()
 }

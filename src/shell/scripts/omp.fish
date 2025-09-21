@@ -1,4 +1,3 @@
-set --export --global POSH_THEME ::CONFIG::
 set --export --global POSH_SHELL fish
 set --export --global POSH_SHELL_VERSION $FISH_VERSION
 set --export --global POWERLINE_COMMAND oh-my-posh
@@ -11,8 +10,6 @@ set --global _omp_executable ::OMP::
 set --global _omp_ftcs_marks 0
 set --global _omp_transient_prompt 0
 set --global _omp_prompt_mark 0
-
-set --export --global POSH_SESSION_ID ::SESSION_ID::
 
 # disable all known python virtual environment prompts
 set --global VIRTUAL_ENV_DISABLE_PROMPT 1

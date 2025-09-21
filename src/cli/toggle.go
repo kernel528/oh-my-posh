@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
@@ -20,15 +21,16 @@ var toggleCmd = &cobra.Command{
 			return
 		}
 
-		flags := &runtime.Flags{
-			SaveCache: true,
-		}
-
 		env := &runtime.Terminal{}
-		env.Init(flags)
-		defer env.Close()
+		env.Init(&runtime.Flags{})
 
-		togglesCache, _ := env.Session().Get(cache.TOGGLECACHE)
+		cache.Init(os.Getenv("POSH_SHELL"), cache.Persist)
+
+		defer func() {
+			cache.Close()
+		}()
+
+		togglesCache, _ := cache.Get[string](cache.Session, cache.TOGGLECACHE)
 		var currentToggles []string
 		if len(togglesCache) != 0 {
 			currentToggles = strings.Split(togglesCache, ",")
@@ -58,7 +60,7 @@ var toggleCmd = &cobra.Command{
 			newToggles = append(newToggles, segment)
 		}
 
-		env.Session().Set(cache.TOGGLECACHE, strings.Join(newToggles, ","), cache.INFINITE)
+		cache.Set(cache.Session, cache.TOGGLECACHE, strings.Join(newToggles, ","), cache.INFINITE)
 	},
 }
 

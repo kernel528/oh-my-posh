@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/spf13/cobra"
 )
@@ -69,17 +70,17 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 			return
 		}
 
-		timestamp := time.Now().Format("20060102T150405.000")
-		cli := append([]string{cmd.Name()}, args...)
-		filename := fmt.Sprintf("%s-%s.log", timestamp, strings.Join(cli, "-"))
-
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return
+		var prefix string
+		if shellName != "" {
+			prefix = fmt.Sprintf("%s-", shellName)
 		}
 
-		logPath := filepath.Join(home, ".oh-my-posh")
-		err = os.MkdirAll(logPath, 0755)
+		cli := append([]string{cmd.Name()}, args...)
+
+		filename := fmt.Sprintf("%s-%s%s.log", time.Now().Format("02012006T150405.000"), prefix, strings.Join(cli, "-"))
+
+		logPath := filepath.Join(cache.Path(), "logs")
+		err := os.MkdirAll(logPath, 0755)
 		if err != nil {
 			return
 		}
@@ -102,6 +103,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&configFlag, "config", "c", "", "config file path")
 	RootCmd.PersistentFlags().BoolVar(&silent, "silent", false, "do not print anything")
 	RootCmd.PersistentFlags().BoolVar(&trace, "trace", false, "enable tracing")
+	RootCmd.PersistentFlags().BoolVar(&plain, "plain", false, "plain text output (no ANSI)")
 	RootCmd.Flags().BoolVar(&printVersion, "version", false, "print the version number and exit")
 
 	// Deprecated flags, should be kept to avoid breaking CLI integration.

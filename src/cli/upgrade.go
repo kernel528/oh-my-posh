@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
@@ -50,22 +51,23 @@ var upgradeCmd = &cobra.Command{
 
 		env := &runtime.Terminal{}
 		env.Init(&runtime.Flags{
-			Debug:     debug,
-			SaveCache: true,
+			Debug: debug,
 		})
+
+		cache.Init(sh, cache.Persist)
 
 		terminal.Init(sh)
 		fmt.Print(terminal.StartProgress())
 
-		cfg, _ := config.Load(configFlag, false)
+		cfg := config.Get(configFlag, false)
 
 		defer func() {
 			fmt.Print(terminal.StopProgress())
 
 			// always reset the cache key so we respect the interval no matter what the outcome
-			env.Cache().Set(upgrade.CACHEKEY, "", cfg.Upgrade.Interval)
+			cache.Set(cache.Device, upgrade.CACHEKEY, "", cfg.Upgrade.Interval)
 
-			env.Close()
+			cache.Close()
 
 			if !debug {
 				return
@@ -91,6 +93,8 @@ var upgradeCmd = &cobra.Command{
 			return
 		}
 
+		log.Debugf("current version: v%s, latest version: v%s", build.Version, latest)
+
 		if force {
 			log.Debug("forced upgrade")
 			exitcode = executeUpgrade(cfg.Upgrade)
@@ -105,9 +109,12 @@ var upgradeCmd = &cobra.Command{
 		}
 
 		if build.Version != latest {
+			log.Debug("upgrade available")
 			exitcode = executeUpgrade(cfg.Upgrade)
 			return
 		}
+
+		log.Debug("already on the latest version")
 	},
 }
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/gob"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,10 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 )
+
+func init() {
+	gob.Register([]*Configuration{})
+}
 
 type Resource struct {
 	dsc.Resource[*Configuration]
@@ -33,7 +38,7 @@ type Configuration struct {
 
 func (s *Resource) Add(configPath string) {
 	if configPath == "" || strings.HasPrefix(configPath, "http") {
-		log.Debug("Invalid configuration path:", configPath)
+		log.Debug("local configuration not provided or remote configuration, skipping")
 		return
 	}
 
@@ -107,7 +112,7 @@ func (c *Configuration) Resolve() (*Configuration, bool) {
 	c.resolved = true
 
 	// we use pwsh as that will never omit any feature
-	data, _ := Load(c.Source, false)
+	data := Load(c.Source, false)
 	if data == nil {
 		log.Debug("No configuration data found")
 		return nil, false

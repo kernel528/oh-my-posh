@@ -18,7 +18,6 @@ func DSC() *Resource {
 }
 
 func (s *Resource) Apply(schema string) error {
-	SetCache(s.Cache)
 	return s.Resource.Apply(schema)
 }
 

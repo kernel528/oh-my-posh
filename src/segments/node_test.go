@@ -10,7 +10,7 @@ import (
 )
 
 func TestNodeMatchesVersionFile(t *testing.T) {
-	nodeVersion := version{
+	nodeVersion := Version{
 		Full:  "22.17.0",
 		Major: "22",
 		Minor: "17",
@@ -41,8 +41,8 @@ func TestNodeMatchesVersionFile(t *testing.T) {
 		env.On("FileContent", ".nvmrc").Return(tc.RCVersion)
 
 		node := &Node{
-			language: language{
-				version: nodeVersion,
+			Language: Language{
+				Version: nodeVersion,
 			},
 		}
 		node.Init(properties.Map{}, env)

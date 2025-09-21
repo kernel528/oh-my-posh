@@ -3,8 +3,10 @@ package cli
 import (
 	"fmt"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/prompt"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/spf13/cobra"
@@ -61,8 +63,12 @@ func createPrintCmd() *cobra.Command {
 				return
 			}
 
+			if shellName == "" {
+				shellName = shell.GENERIC
+			}
+
 			flags := &runtime.Flags{
-				Config:        configFlag,
+				ConfigPath:    configFlag,
 				PWD:           pwd,
 				PSWD:          pswd,
 				ErrorCode:     status,
@@ -80,16 +86,22 @@ func createPrintCmd() *cobra.Command {
 				Column:        column,
 				JobCount:      jobCount,
 				IsPrimary:     args[0] == prompt.PRIMARY,
-				SaveCache:     saveCache,
 				Escape:        escape,
 				Force:         force,
 			}
+
+			options := []cache.Option{}
+			if saveCache {
+				options = append(options, cache.Persist)
+			}
+
+			cache.Init(shellName, options...)
 
 			eng := prompt.New(flags)
 
 			defer func() {
 				template.SaveCache()
-				eng.Env.Close()
+				cache.Close()
 			}()
 
 			switch args[0] {
@@ -128,7 +140,6 @@ func createPrintCmd() *cobra.Command {
 	printCmd.Flags().IntVarP(&stackCount, "stack-count", "s", 0, "number of locations on the stack")
 	printCmd.Flags().IntVarP(&terminalWidth, "terminal-width", "w", 0, "width of the terminal")
 	printCmd.Flags().StringVar(&command, "command", "", "tooltip command")
-	printCmd.Flags().BoolVarP(&plain, "plain", "p", false, "plain text output (no ANSI)")
 	printCmd.Flags().BoolVar(&cleared, "cleared", false, "do we have a clear terminal or not")
 	printCmd.Flags().BoolVar(&eval, "eval", false, "output the prompt for eval")
 	printCmd.Flags().IntVar(&column, "column", 0, "the column position of the cursor")

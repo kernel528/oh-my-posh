@@ -32,6 +32,7 @@ This command is used to get the value of the following variables:
 		"accent",
 		"toggles",
 		"width",
+		cache.TTL,
 	},
 	Args: NoArgsOrOneValidArg,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -51,7 +52,12 @@ This command is used to get the value of the following variables:
 
 		env := &runtime.Terminal{}
 		env.Init(flags)
-		defer env.Close()
+
+		cache.Init(shellName, cache.Persist)
+
+		defer func() {
+			cache.Close()
+		}()
 
 		switch args[0] {
 		case "shell":
@@ -67,7 +73,7 @@ This command is used to get the value of the following variables:
 		case "toggles":
 			var toggles []string
 
-			togglesCache, _ := env.Session().Get(cache.TOGGLECACHE)
+			togglesCache, _ := cache.Get[string](cache.Session, cache.TOGGLECACHE)
 			if len(togglesCache) != 0 {
 				toggles = strings.Split(togglesCache, ",")
 			}
@@ -89,6 +95,8 @@ This command is used to get the value of the following variables:
 			}
 
 			fmt.Print(width)
+		case cache.TTL:
+			fmt.Print(cache.GetTTL())
 		default:
 			_ = cmd.Help()
 		}

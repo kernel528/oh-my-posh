@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
@@ -73,16 +74,19 @@ func runInit(sh, command string) {
 		log.Enable(plain)
 	}
 
-	cfg, hash := config.Load(configFlag, false)
+	cache.Init(sh, cache.NewSession, cache.Persist)
+
+	cfg := config.Load(configFlag, false)
 
 	flags := &runtime.Flags{
-		Shell:     sh,
-		Config:    cfg.Source,
-		Strict:    strict,
-		Debug:     debug,
-		SaveCache: true,
-		Init:      true,
-		Eval:      eval,
+		Shell:      sh,
+		ConfigPath: cfg.Source,
+		ConfigHash: cfg.Hash(),
+		Strict:     strict,
+		Debug:      debug,
+		Init:       true,
+		Eval:       eval,
+		Plain:      plain,
 	}
 
 	env := &runtime.Terminal{}
@@ -91,13 +95,15 @@ func runInit(sh, command string) {
 	template.Init(env, cfg.Var, cfg.Maps)
 
 	defer func() {
-		cfg.Store(env.Session())
+		cfg.Store()
 		template.SaveCache()
-		env.Close()
+		if err := cache.Clear(false, shell.InitScriptName(env.Flags())); err != nil {
+			log.Error(err)
+		}
+		cache.Close()
 	}()
 
 	feats := cfg.Features(env)
-	flags.ConfigHash = fmt.Sprintf("%s.%s", hash, feats.Hash())
 
 	var output string
 
@@ -108,20 +114,13 @@ func runInit(sh, command string) {
 		output = shell.Init(env, feats)
 	}
 
-	if !debug {
-		configDSC := config.DSC()
-		configDSC.Load(env.Cache())
-		configDSC.Add(configFlag)
-		configDSC.Save()
-
-		shellDSC := shell.DSC()
-		shellDSC.Load(env.Cache())
-		shellDSC.Add(&shell.Shell{
-			Command: command,
-			Name:    sh,
-		})
-		shellDSC.Save()
-	}
+	shellDSC := shell.DSC()
+	shellDSC.Load()
+	shellDSC.Add(&shell.Shell{
+		Command: command,
+		Name:    sh,
+	})
+	shellDSC.Save()
 
 	if silent {
 		return

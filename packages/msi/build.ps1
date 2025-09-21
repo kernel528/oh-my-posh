@@ -1,14 +1,14 @@
 Param
 (
     [parameter(Mandatory = $true)]
-    [ValidateSet('x64', 'arm64', 'x86')]
+    [ValidateSet('x64', 'arm64')]
     [System.String]$Architecture,
     [parameter(Mandatory = $true)]
     [string]
     $Version,
     [parameter(Mandatory = $false)]
     [string]
-    $SDKVersion = "10.0.22621.0",
+    $SDKVersion = "10.0.26100.0",
     [switch]$Sign,
     [switch]$Copy
 )
@@ -27,7 +27,6 @@ New-Item -Path "." -Name "out" -ItemType Directory -ErrorAction SilentlyContinue
 
 if ($Copy) {
     switch ($Architecture) {
-        'x86' { $file = "posh-windows-386.exe" }
         'x64' { $file = "posh-windows-amd64.exe" }
         Default { $file = "posh-windows-$Architecture.exe" }
     }
@@ -61,7 +60,7 @@ if ($Sign) {
     $signtoolDlib = $signtoolDlib -Replace '\\', '/'
 
     # sign installer
-    & $signtool sign /v /debug /fd SHA256 /tr 'http://timestamp.acs.microsoft.com' /td SHA256 /dlib "$signtoolDlib" /dmdf ../../src/metadata.json "$installer"
+    & $signtool sign /v /debug /d "Oh My Posh" /fd SHA256 /tr 'http://timestamp.acs.microsoft.com' /td SHA256 /dlib "$signtoolDlib" /dmdf ../../src/metadata.json "$installer"
 }
 
 Write-Host "Creating MSIX package"
@@ -85,7 +84,7 @@ $makeappx = "C:/Program Files (x86)/Windows Kits/10/bin/$SDKVersion/x64/makeappx
 
 if ($Sign) {
     Write-Host "Signing MSIX"
-    & "$signtool" sign /v /debug /fd SHA256 /tr 'http://timestamp.acs.microsoft.com' /td SHA256 /dlib "$signtoolDlib" /dmdf ../../src/metadata.json "$installerMSIX"
+    & "$signtool" sign /v /debug /d "Oh My Posh" /fd SHA256 /tr 'http://timestamp.acs.microsoft.com' /td SHA256 /dlib "$signtoolDlib" /dmdf ../../src/metadata.json "$installerMSIX"
 }
 
 Write-Host "Creating hash files"

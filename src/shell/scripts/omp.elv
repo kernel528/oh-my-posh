@@ -1,4 +1,3 @@
-set-env POSH_THEME ::CONFIG::
 set-env POSH_SHELL elvish
 set-env POSH_SHELL_VERSION $version
 set-env POWERLINE_COMMAND oh-my-posh
@@ -12,8 +11,6 @@ var _omp_status = 0
 var _omp_no_status = 1
 var _omp_execution_time = -1
 var _omp_terminal_width = ($_omp_executable get width)
-
-set-env POSH_SESSION_ID ::SESSION_ID::
 
 fn _omp-after-readline-hook {|_|
     set _omp_execution_time = -1
