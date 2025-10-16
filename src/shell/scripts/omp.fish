@@ -103,7 +103,7 @@ end
 
 function fish_right_prompt
     if test "$_omp_transient" = 1
-        set _omp_transient 0
+        set --global _omp_transient 0
         return
     end
 
@@ -113,7 +113,7 @@ function fish_right_prompt
         return
     end
 
-    set _omp_new_prompt 0
+    set --global _omp_new_prompt 0
     set --global _omp_current_rprompt (_omp_get_prompt right | string join '')
 
     echo -n "$_omp_current_rprompt"
@@ -195,11 +195,11 @@ function _omp_enter_key_handler
     end
 
     if commandline --is-valid || test -z (commandline --current-buffer | string trim -l | string collect)
-        set _omp_new_prompt 1
-        set _omp_tooltip_command ''
+        set --global _omp_new_prompt 1
+        set --global _omp_tooltip_command ''
 
         if test $_omp_transient_prompt = 1
-            set _omp_transient 1
+            set --global _omp_transient 1
             commandline --function repaint
         end
     end
@@ -213,11 +213,11 @@ function _omp_ctrl_c_key_handler
     end
 
     # Render a transient prompt on Ctrl-C with non-empty command line buffer.
-    set _omp_new_prompt 1
-    set _omp_tooltip_command ''
+    set --global _omp_new_prompt 1
+    set --global _omp_tooltip_command ''
 
     if test $_omp_transient_prompt = 1
-        set _omp_transient 1
+        set --global _omp_transient 1
         commandline --function repaint
     end
 
@@ -242,6 +242,6 @@ end
 
 # This can be called by user whenever re-rendering is required.
 function omp_repaint_prompt
-    set _omp_new_prompt 1
+    set --global _omp_new_prompt 1
     commandline --function repaint
 end

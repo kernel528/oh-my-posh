@@ -10,9 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// getCmd represents the get command
-var getCache = &cobra.Command{
-	Use:   "cache [path|clear|ttl]",
+var (
+	session bool
+)
+
+// cacheCmd represents the cache command
+var cacheCmd = &cobra.Command{
+	Use:   "cache [path|clear|ttl|show]",
 	Short: "Interact with the oh-my-posh cache",
 	Long: `Interact with the oh-my-posh cache.
 
@@ -20,11 +24,13 @@ You can do the following:
 
 - path: list cache path
 - clear: remove all cache values
-- ttl: get cache TTL in days`,
+- ttl: get cache TTL in days
+- show: print a detailed list of all cached values`,
 	ValidArgs: []string{
 		"path",
 		"clear",
 		cache.TTL,
+		"show",
 	},
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -62,10 +68,19 @@ You can do the following:
 			cache.Init(os.Getenv("POSH_SHELL"), cache.Persist)
 			cache.Set(cache.Device, cache.TTL, ttl, cache.INFINITE)
 			cache.Close()
+		case "show":
+			cache.Init(os.Getenv("POSH_SHELL"))
+			store := cache.Device
+			if session {
+				store = cache.Session
+			}
+
+			fmt.Println(cache.Print(store))
 		}
 	},
 }
 
 func init() {
-	RootCmd.AddCommand(getCache)
+	cacheCmd.Flags().BoolVarP(&session, "session", "s", false, "show the session cache")
+	RootCmd.AddCommand(cacheCmd)
 }
