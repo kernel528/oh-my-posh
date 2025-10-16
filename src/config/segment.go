@@ -37,7 +37,7 @@ type Segment struct {
 	writer                 SegmentWriter
 	env                    runtime.Environment
 	Properties             properties.Map `json:"properties,omitempty" toml:"properties,omitempty" yaml:"properties,omitempty"`
-	Cache                  *cache.Config  `json:"cache,omitempty" toml:"cache,omitempty" yaml:"cache,omitempty"`
+	Cache                  *Cache         `json:"cache,omitempty" toml:"cache,omitempty" yaml:"cache,omitempty"`
 	Alias                  string         `json:"alias,omitempty" toml:"alias,omitempty" yaml:"alias,omitempty"`
 	styleCache             SegmentStyle
 	name                   string
@@ -59,18 +59,19 @@ type Segment struct {
 	ExcludeFolders         []string       `json:"exclude_folders,omitempty" toml:"exclude_folders,omitempty" yaml:"exclude_folders,omitempty"`
 	IncludeFolders         []string       `json:"include_folders,omitempty" toml:"include_folders,omitempty" yaml:"include_folders,omitempty"`
 	Needs                  []string       `json:"-" toml:"-" yaml:"-"`
-	MinWidth               int            `json:"min_width,omitempty" toml:"min_width,omitempty" yaml:"min_width,omitempty"`
-	MaxWidth               int            `json:"max_width,omitempty" toml:"max_width,omitempty" yaml:"max_width,omitempty"`
 	Timeout                time.Duration  `json:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty"`
+	MaxWidth               int            `json:"max_width,omitempty" toml:"max_width,omitempty" yaml:"max_width,omitempty"`
+	MinWidth               int            `json:"min_width,omitempty" toml:"min_width,omitempty" yaml:"min_width,omitempty"`
 	Duration               time.Duration  `json:"-" toml:"-" yaml:"-"`
 	NameLength             int            `json:"-" toml:"-" yaml:"-"`
+	Index                  int            `json:"index,omitempty" toml:"index,omitempty" yaml:"index,omitempty"`
 	Interactive            bool           `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
 	Enabled                bool           `json:"-" toml:"-" yaml:"-"`
 	Newline                bool           `json:"newline,omitempty" toml:"newline,omitempty" yaml:"newline,omitempty"`
 	InvertPowerline        bool           `json:"invert_powerline,omitempty" toml:"invert_powerline,omitempty" yaml:"invert_powerline,omitempty"`
 	Force                  bool           `json:"force,omitempty" toml:"force,omitempty" yaml:"force,omitempty"`
 	restored               bool           `json:"-" toml:"-" yaml:"-"`
-	Index                  int            `json:"index,omitempty" toml:"index,omitempty" yaml:"index,omitempty"`
+	Toggled                bool           `json:"toggled,omitempty" toml:"toggled,omitempty" yaml:"toggled,omitempty"`
 }
 
 func (segment *Segment) Name() string {
@@ -224,18 +225,20 @@ func (segment *Segment) hasCache() bool {
 }
 
 func (segment *Segment) isToggled() bool {
-	toggles, OK := segment.env.Session().Get(cache.TOGGLECACHE)
-	if !OK || len(toggles) == 0 {
+	togglesMap, OK := cache.Get[map[string]bool](cache.Session, cache.TOGGLECACHE)
+	if !OK || len(togglesMap) == 0 {
 		log.Debug("no toggles found")
 		return false
 	}
 
-	list := strings.SplitSeq(toggles, ",")
-	for toggle := range list {
-		if SegmentType(toggle) == segment.Type || toggle == segment.Alias {
-			log.Debugf("segment toggled off: %s", segment.Name())
-			return true
-		}
+	segmentName := segment.Alias
+	if segmentName == "" {
+		segmentName = string(segment.Type)
+	}
+
+	if togglesMap[segmentName] {
+		log.Debugf("segment toggled off: %s", segment.Name())
+		return true
 	}
 
 	return false
@@ -247,7 +250,7 @@ func (segment *Segment) restoreCache() bool {
 	}
 
 	cacheKey := segment.cacheKey()
-	data, OK := segment.env.Session().Get(cacheKey)
+	data, OK := cache.Get[string](cache.Session, cacheKey)
 	if !OK {
 		log.Debugf("no cache found for segment: %s, key: %s", segment.Name(), cacheKey)
 		return false
@@ -279,15 +282,18 @@ func (segment *Segment) setCache() {
 		return
 	}
 
-	segment.env.Session().Set(segment.cacheKey(), string(data), segment.Cache.Duration)
+	// TODO: check if we can make segmentwriter a generic Type indicator
+	// that way we can actually get the value straight from cache.Get
+	// and marchalling is obsolete
+	cache.Set(cache.Session, segment.cacheKey(), string(data), segment.Cache.Duration)
 }
 
 func (segment *Segment) cacheKey() string {
 	format := "segment_cache_%s"
 	switch segment.Cache.Strategy {
-	case cache.Session:
+	case Session:
 		return fmt.Sprintf(format, segment.Name())
-	case cache.Folder:
+	case Folder:
 		fallthrough
 	default:
 		return fmt.Sprintf(format, strings.Join([]string{segment.Name(), segment.folderKey()}, "_"))

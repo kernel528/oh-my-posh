@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/spf13/cobra"
@@ -15,15 +17,16 @@ var noticeCmd = &cobra.Command{
 	Long:  "Print the upgrade notice when a new version is available.",
 	Args:  cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		flags := &runtime.Flags{
-			SaveCache: true,
-		}
-
 		env := &runtime.Terminal{}
-		env.Init(flags)
-		defer env.Close()
+		env.Init(&runtime.Flags{})
 
-		cfg, _ := config.Load(configFlag, false)
+		cache.Init(os.Getenv("POSH_SHELL"), cache.Persist)
+
+		defer func() {
+			cache.Close()
+		}()
+
+		cfg := config.Get(configFlag, false)
 
 		if notice, hasNotice := cfg.Upgrade.Notice(); hasNotice {
 			fmt.Println(notice)

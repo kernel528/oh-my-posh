@@ -1607,6 +1607,7 @@
                       "*.fsx",
                       "*.sln",
                       "*.slnf",
+                      "*.slnx",
                       "*.csproj",
                       "*.fsproj",
                       "*.vbproj",
@@ -1936,6 +1937,12 @@
                     "type": "boolean",
                     "title": "Fetch info when in a bare repo",
                     "description": "Fetch info when in a bare repo or not",
+                    "default": false
+                  },
+                  "disable_with_jj": {
+                    "type": "boolean",
+                    "title": "Disable with Jujutsu",
+                    "description": "Disable the git segment when there's a .jj directory in the parent file path",
                     "default": false
                   },
                   "branch_icon": {

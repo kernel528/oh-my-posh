@@ -1,6 +1,7 @@
 package color
 
 import (
+	"encoding/gob"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,18 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
+)
+
+func init() {
+	gob.Register(&Set{})
+	gob.Register((*Ansi)(nil))
+	gob.Register(&Palette{})
+	gob.Register(&Palettes{})
+	gob.Register(&Cycle{})
+}
+
+const (
+	accentColor = "accent_color"
 )
 
 var TrueColor = true
@@ -164,10 +177,8 @@ func (d *Defaults) SetAccentColor(env runtime.Environment, defaultColor Ansi) {
 	defer log.Trace(time.Now())
 
 	// get accent color from session cache first
-	if accent, OK := env.Session().Get("accent_color"); OK {
-		accentColors := &Set{}
-		accentColors.ParseString(accent)
-		d.accent = accentColors
+	if accent, OK := cache.Get[*Set](cache.Device, accentColor); OK {
+		d.accent = accent
 		return
 	}
 
@@ -193,7 +204,7 @@ func (d *Defaults) SetAccentColor(env runtime.Environment, defaultColor Ansi) {
 		Background: Ansi(background.String()),
 	}
 
-	env.Session().Set("accent_color", d.accent.String(), cache.INFINITE)
+	cache.Set(cache.Device, accentColor, d.accent, cache.INFINITE)
 }
 
 type RGB struct {

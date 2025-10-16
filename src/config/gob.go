@@ -8,33 +8,46 @@ import (
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 )
-
-func init() {
-	// Register types that can appear in any values for gob encoding/decoding
-	// This is necessary for properties.Map which contains map[Property]any
-	gob.Register([]any{})
-	gob.Register(map[string]any{})
-	gob.Register(map[any]any{})
-	gob.Register([]string{})
-	gob.Register(map[string]string{})
-	gob.Register([]int{})
-	gob.Register([]float64{})
-	gob.Register([]bool{})
-	gob.Register(int64(0))
-	gob.Register(uint64(0))
-	gob.Register(float32(0))
-	gob.Register(properties.Map{})
-	gob.Register(properties.Property(""))
-	gob.Register(map[properties.Property]any{})
-}
 
 const (
-	key = "CONFIG_GOB"
+	configKey = "CONFIG"
+	SourceKey = "CONFIG_SOURCE"
 )
 
-func (cfg *Config) Store(session cache.Cache) {
+func (cfg *Config) Store() {
+	defer log.Trace(time.Now())
+
+	cache.Set(cache.Session, SourceKey, cfg.Source, cache.INFINITE)
+	cache.Set(cache.Session, configKey, cfg.Base64(), cache.INFINITE)
+}
+
+func Get(configFile string, reload bool) *Config {
+	defer log.Trace(time.Now())
+
+	if reload {
+		log.Debug("reload mode enabled")
+		if source, OK := cache.Get[string](cache.Session, SourceKey); OK {
+			return Load(source, false)
+		}
+	}
+
+	base64String, found := cache.Get[string](cache.Session, configKey)
+	if !found {
+		log.Debug("no cached config found")
+		return Load(configFile, false)
+	}
+
+	var cfg Config
+	if err := cfg.Restore(base64String); err != nil {
+		log.Debug("failed to restore config from cache")
+		return Load(configFile, false)
+	}
+
+	return &cfg
+}
+
+func (cfg *Config) Base64() string {
 	defer log.Trace(time.Now())
 
 	var buffer bytes.Buffer
@@ -42,46 +55,29 @@ func (cfg *Config) Store(session cache.Cache) {
 	err := encoder.Encode(cfg)
 	if err != nil {
 		log.Error(err)
-		return
+		return ""
 	}
 
-	// Encode the binary gob data as base64 string
-	gobBase64 := base64.StdEncoding.EncodeToString(buffer.Bytes())
-	session.Set(key, gobBase64, cache.INFINITE)
+	return base64.StdEncoding.EncodeToString(buffer.Bytes())
 }
 
-func Get(session cache.Cache, configFile string, edit bool) *Config {
+func (cfg *Config) Restore(base64String string) error {
 	defer log.Trace(time.Now())
 
-	if edit {
-		log.Debug("edit mode enabled")
-		cfg, _ := Load(configFile, false)
-		return cfg
-	}
-
-	gobBase64, found := session.Get(key)
-	if !found {
-		log.Debug("no cached config found")
-		cfg, _ := Load(configFile, false)
-		return cfg
-	}
-
-	// Decode base64 back to binary
-	gobData, err := base64.StdEncoding.DecodeString(gobBase64)
+	data, err := base64.StdEncoding.DecodeString(base64String)
 	if err != nil {
 		log.Error(err)
-		cfg, _ := Load(configFile, false)
-		return cfg
+		return err
 	}
 
-	var cfg Config
-	decoder := gob.NewDecoder(bytes.NewReader(gobData))
-	err = decoder.Decode(&cfg)
+	var buffer bytes.Buffer
+	buffer.Write(data)
+	decoder := gob.NewDecoder(&buffer)
+	err = decoder.Decode(cfg)
 	if err != nil {
 		log.Error(err)
-		cfg, _ := Load(configFile, false)
-		return cfg
+		return err
 	}
 
-	return &cfg
+	return nil
 }

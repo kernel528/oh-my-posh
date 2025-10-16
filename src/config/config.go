@@ -1,9 +1,11 @@
 package config
 
 import (
+	"encoding/gob"
 	"slices"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/color"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
@@ -14,6 +16,10 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 )
+
+func init() {
+	gob.Register(&Config{})
+}
 
 const (
 	JSON string = "json"
@@ -54,29 +60,30 @@ type Config struct {
 	ErrorLine               *Segment               `json:"error_line,omitempty" toml:"error_line,omitempty" yaml:"error_line,omitempty"`
 	Maps                    *maps.Config           `json:"maps,omitempty" toml:"maps,omitempty" yaml:"maps,omitempty"`
 	Upgrade                 *upgrade.Config        `json:"upgrade,omitempty" toml:"upgrade,omitempty" yaml:"upgrade,omitempty"`
-	TerminalBackground      color.Ansi             `json:"terminal_background,omitempty" toml:"terminal_background,omitempty" yaml:"terminal_background,omitempty"`
+	Extends                 string                 `json:"extends,omitempty" toml:"extends,omitempty" yaml:"extends,omitempty"`
 	AccentColor             color.Ansi             `json:"accent_color,omitempty" toml:"accent_color,omitempty" yaml:"accent_color,omitempty"`
 	ConsoleTitleTemplate    string                 `json:"console_title_template,omitempty" toml:"console_title_template,omitempty" yaml:"console_title_template,omitempty"`
 	PWD                     string                 `json:"pwd,omitempty" toml:"pwd,omitempty" yaml:"pwd,omitempty"`
 	Source                  string                 `json:"-" toml:"-" yaml:"-"`
 	Format                  string                 `json:"-" toml:"-" yaml:"-"`
-	Extends                 string                 `json:"extends,omitempty" toml:"extends,omitempty" yaml:"extends,omitempty"`
+	TerminalBackground      color.Ansi             `json:"terminal_background,omitempty" toml:"terminal_background,omitempty" yaml:"terminal_background,omitempty"`
 	ToolTipsAction          Action                 `json:"tooltips_action,omitempty" toml:"tooltips_action,omitempty" yaml:"tooltips_action,omitempty"`
+	Blocks                  []*Block               `json:"blocks,omitempty" toml:"blocks,omitempty" yaml:"blocks,omitempty"`
 	Cycle                   color.Cycle            `json:"cycle,omitempty" toml:"cycle,omitempty" yaml:"cycle,omitempty"`
 	ITermFeatures           terminal.ITermFeatures `json:"iterm_features,omitempty" toml:"iterm_features,omitempty" yaml:"iterm_features,omitempty"`
-	Blocks                  []*Block               `json:"blocks,omitempty" toml:"blocks,omitempty" yaml:"blocks,omitempty"`
 	Tooltips                []*Segment             `json:"tooltips,omitempty" toml:"tooltips,omitempty" yaml:"tooltips,omitempty"`
-	Version                 int                    `json:"version" toml:"version" yaml:"version"`
-	PatchPwshBleed          bool                   `json:"patch_pwsh_bleed,omitempty" toml:"patch_pwsh_bleed,omitempty" yaml:"patch_pwsh_bleed,omitempty"`
-	MigrateGlyphs           bool                   `json:"-" toml:"-" yaml:"-"`
-	ShellIntegration        bool                   `json:"shell_integration,omitempty" toml:"shell_integration,omitempty" yaml:"shell_integration,omitempty"`
-	EnableCursorPositioning bool                   `json:"enable_cursor_positioning,omitempty" toml:"enable_cursor_positioning,omitempty" yaml:"enable_cursor_positioning,omitempty"`
-	Async                   bool                   `json:"async,omitempty" toml:"async,omitempty" yaml:"async,omitempty"`
-	FinalSpace              bool                   `json:"final_space,omitempty" toml:"final_space,omitempty" yaml:"final_space,omitempty"`
-	UpgradeNotice           bool                   `json:"-" toml:"-" yaml:"-"`
+	hash                    uint64
+	Version                 int  `json:"version" toml:"version" yaml:"version"`
+	MigrateGlyphs           bool `json:"-" toml:"-" yaml:"-"`
+	Async                   bool `json:"async,omitempty" toml:"async,omitempty" yaml:"async,omitempty"`
+	ShellIntegration        bool `json:"shell_integration,omitempty" toml:"shell_integration,omitempty" yaml:"shell_integration,omitempty"`
+	FinalSpace              bool `json:"final_space,omitempty" toml:"final_space,omitempty" yaml:"final_space,omitempty"`
+	UpgradeNotice           bool `json:"-" toml:"-" yaml:"-"`
 	updated                 bool
 	extended                bool
+	PatchPwshBleed          bool `json:"patch_pwsh_bleed,omitempty" toml:"patch_pwsh_bleed,omitempty" yaml:"patch_pwsh_bleed,omitempty"`
 	AutoUpgrade             bool `json:"-" toml:"-" yaml:"-"`
+	EnableCursorPositioning bool `json:"enable_cursor_positioning,omitempty" toml:"enable_cursor_positioning,omitempty" yaml:"enable_cursor_positioning,omitempty"`
 }
 
 func (cfg *Config) MakeColors(env runtime.Environment) color.String {
@@ -113,7 +120,7 @@ func (cfg *Config) getPalette() color.Palette {
 func (cfg *Config) Features(env runtime.Environment) shell.Features {
 	var feats shell.Features
 
-	asyncShells := []string{shell.BASH, shell.ZSH, shell.FISH, shell.PWSH, shell.PWSH5}
+	asyncShells := []string{shell.BASH, shell.ZSH, shell.FISH, shell.PWSH}
 
 	if cfg.Async && slices.Contains(asyncShells, env.Shell()) {
 		log.Debug("async enabled")
@@ -137,7 +144,7 @@ func (cfg *Config) Features(env runtime.Environment) shell.Features {
 
 	// do not enable upgrade features when async is enabled
 	if feats&shell.Async == 0 {
-		feats |= cfg.upgradeFeatures(env)
+		feats |= cfg.upgradeFeatures()
 	}
 
 	if cfg.ErrorLine != nil || cfg.ValidLine != nil {
@@ -188,24 +195,19 @@ func (cfg *Config) Features(env runtime.Environment) shell.Features {
 	return feats
 }
 
-func (cfg *Config) upgradeFeatures(env runtime.Environment) shell.Features {
+func (cfg *Config) upgradeFeatures() shell.Features {
 	var feats shell.Features
 
-	if _, OK := env.Cache().Get(upgrade.CACHEKEY); OK && !cfg.Upgrade.Force {
-		log.Debug("upgrade cache key found and not forced, skipping upgrade")
-		return feats
-	}
-
 	autoUpgrade := cfg.Upgrade.Auto
-	if _, OK := env.Cache().Get(AUTOUPGRADE); OK {
-		log.Debug("auto upgrade key found")
-		autoUpgrade = true
+	if val, OK := cache.Get[bool](cache.Device, AUTOUPGRADE); OK {
+		log.Debug("auto upgrade key found, overriding config")
+		autoUpgrade = val
 	}
 
 	upgradeNotice := cfg.Upgrade.DisplayNotice
-	if _, OK := env.Cache().Get(UPGRADENOTICE); OK {
-		log.Debug("upgrade notice key found")
-		upgradeNotice = true
+	if val, OK := cache.Get[bool](cache.Device, UPGRADENOTICE); OK {
+		log.Debug("upgrade notice key found, overriding config")
+		upgradeNotice = val
 	}
 
 	if upgradeNotice && !autoUpgrade {
@@ -219,4 +221,33 @@ func (cfg *Config) upgradeFeatures(env runtime.Environment) shell.Features {
 	}
 
 	return feats
+}
+
+func (cfg *Config) Hash() uint64 {
+	return cfg.hash
+}
+
+// toggleSegments processes all segments in all blocks and adds segments
+// with Toggled == true to the toggle cache, effectively toggling them off.
+func (cfg *Config) toggleSegments() {
+	currentToggleSet, _ := cache.Get[map[string]bool](cache.Session, cache.TOGGLECACHE)
+	if currentToggleSet == nil {
+		currentToggleSet = make(map[string]bool)
+	}
+
+	for _, block := range cfg.Blocks {
+		for _, segment := range block.Segments {
+			if segment.Toggled {
+				segmentName := segment.Alias
+				if segmentName == "" {
+					segmentName = string(segment.Type)
+				}
+
+				currentToggleSet[segmentName] = true
+			}
+		}
+	}
+
+	// Update cache with the map directly
+	cache.Set(cache.Session, cache.TOGGLECACHE, currentToggleSet, cache.INFINITE)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
@@ -35,6 +36,13 @@ var upgradeCmd = &cobra.Command{
 			log.Enable(plain)
 		}
 
+		if upgrade.IsPackagedInstallation() {
+			msg := "upgrade is not supported when installed as a MSIX package"
+			log.Debug(msg)
+			fmt.Printf("\n  ❌ %s\n\n", msg)
+			return
+		}
+
 		supportedPlatforms := []string{
 			runtime.WINDOWS,
 			runtime.DARWIN,
@@ -50,22 +58,28 @@ var upgradeCmd = &cobra.Command{
 
 		env := &runtime.Terminal{}
 		env.Init(&runtime.Flags{
-			Debug:     debug,
-			SaveCache: true,
+			Debug: debug,
 		})
+
+		cache.Init(sh, cache.Persist)
+
+		if _, OK := cache.Get[string](cache.Device, upgrade.CACHEKEY); OK && !force {
+			log.Debug("upgrade check already performed recently, skipping")
+			return
+		}
 
 		terminal.Init(sh)
 		fmt.Print(terminal.StartProgress())
 
-		cfg, _ := config.Load(configFlag, false)
+		cfg := config.Get(configFlag, false)
 
 		defer func() {
 			fmt.Print(terminal.StopProgress())
 
 			// always reset the cache key so we respect the interval no matter what the outcome
-			env.Cache().Set(upgrade.CACHEKEY, "", cfg.Upgrade.Interval)
+			cache.Set(cache.Device, upgrade.CACHEKEY, "true", cfg.Upgrade.Interval)
 
-			env.Close()
+			cache.Close()
 
 			if !debug {
 				return
@@ -91,6 +105,8 @@ var upgradeCmd = &cobra.Command{
 			return
 		}
 
+		log.Debugf("current version: v%s, latest version: v%s", build.Version, latest)
+
 		if force {
 			log.Debug("forced upgrade")
 			exitcode = executeUpgrade(cfg.Upgrade)
@@ -105,9 +121,12 @@ var upgradeCmd = &cobra.Command{
 		}
 
 		if build.Version != latest {
+			log.Debug("upgrade available")
 			exitcode = executeUpgrade(cfg.Upgrade)
 			return
 		}
+
+		log.Debug("already on the latest version")
 	},
 }
 

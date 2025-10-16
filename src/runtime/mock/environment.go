@@ -3,9 +3,7 @@ package mock
 import (
 	"io"
 	"io/fs"
-	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/battery"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/http"
@@ -182,16 +180,6 @@ func (env *Environment) CachePath() string {
 	return args.String(0)
 }
 
-func (env *Environment) Cache() cache.Cache {
-	args := env.Called()
-	return args.Get(0).(cache.Cache)
-}
-
-func (env *Environment) Session() cache.Cache {
-	args := env.Called()
-	return args.Get(0).(cache.Cache)
-}
-
 func (env *Environment) Close() {
 	_ = env.Called()
 }
@@ -249,22 +237,6 @@ func (env *Environment) HasFileInParentDirs(pattern string, depth uint) bool {
 func (env *Environment) DirMatchesOneOf(dir string, regexes []string) bool {
 	args := env.Called(dir, regexes)
 	return args.Bool(0)
-}
-
-func (env *Environment) Trace(start time.Time, args ...string) {
-	_ = env.Called(start, args)
-}
-
-func (env *Environment) Debug(message string) {
-	_ = env.Called(message)
-}
-
-func (env *Environment) DebugF(format string, a ...any) {
-	_ = env.Called(format, a)
-}
-
-func (env *Environment) Error(err error) {
-	_ = env.Called(err)
 }
 
 func (env *Environment) DirIsWritable(path string) bool {

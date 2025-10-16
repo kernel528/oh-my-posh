@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/prompt"
@@ -46,14 +48,15 @@ func createDebugCmd() *cobra.Command {
 			env := &runtime.Terminal{}
 			env.Init(flags)
 
-			_, reload := env.Cache().Get(config.RELOAD)
-			cfg := config.Get(env.Session(), configFlag, reload)
+			cache.Init(os.Getenv("POSH_SHELL"))
+
+			cfg := getDebugConfig(configFlag)
 
 			template.Init(env, cfg.Var, cfg.Maps)
 
 			defer func() {
 				template.SaveCache()
-				env.Close()
+				cache.Close()
 			}()
 
 			terminal.Init(shell.GENERIC)
@@ -72,7 +75,6 @@ func createDebugCmd() *cobra.Command {
 	}
 
 	debugCmd.Flags().StringVar(&pwd, "pwd", "", "current working directory")
-	debugCmd.Flags().BoolVarP(&plain, "plain", "p", false, "plain text output (no ANSI)")
 
 	// Deprecated flags, should be kept to avoid breaking CLI integration.
 	debugCmd.Flags().StringVar(&shellName, "shell", "", "the shell to print for")
@@ -81,4 +83,13 @@ func createDebugCmd() *cobra.Command {
 	_ = debugCmd.Flags().MarkHidden("shell")
 
 	return debugCmd
+}
+
+func getDebugConfig(configpath string) *config.Config {
+	if len(configpath) != 0 {
+		return config.Load(configpath, false)
+	}
+
+	_, reload := cache.Get[bool](cache.Device, config.RELOAD)
+	return config.Get(configpath, reload)
 }

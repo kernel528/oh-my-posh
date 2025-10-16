@@ -53,7 +53,7 @@ type NuSpec struct {
 }
 
 type Project struct {
-	base
+	Base
 
 	ProjectData
 	Error    string
@@ -99,7 +99,7 @@ func (n *Project) Enabled() bool {
 		},
 		{
 			Name:    "dotnet",
-			Files:   []string{"*.sln", "*.slnf", "*.vbproj", "*.fsproj", "*.csproj"},
+			Files:   []string{"*.sln", "*.slnf", "*.slnx", "*.vbproj", "*.fsproj", "*.csproj"},
 			Fetcher: n.getDotnetProject,
 		},
 		{

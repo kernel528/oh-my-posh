@@ -1,7 +1,7 @@
 package segments
 
 type Flutter struct {
-	language
+	Language
 }
 
 func (f *Flutter) Template() string {
@@ -25,5 +25,5 @@ func (f *Flutter) Enabled() bool {
 	}
 	f.versionURLTemplate = "https://github.com/flutter/flutter/releases/tag/{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
 
-	return f.language.Enabled()
+	return f.Language.Enabled()
 }

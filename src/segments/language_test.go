@@ -5,13 +5,11 @@ import (
 	"slices"
 	"testing"
 
-	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
-	mock_ "github.com/stretchr/testify/mock"
 )
 
 const (
@@ -37,7 +35,7 @@ func (l *languageArgs) hasvalue(value string, list []string) bool {
 	return slices.Contains(list, value)
 }
 
-func bootStrapLanguageTest(args *languageArgs) *language {
+func bootStrapLanguageTest(args *languageArgs) *Language {
 	env := new(mock.Environment)
 
 	for _, command := range args.commands {
@@ -58,16 +56,11 @@ func bootStrapLanguageTest(args *languageArgs) *language {
 	env.On("Pwd").Return(cwd)
 	env.On("Home").Return(home)
 
-	cache := &cache_.Cache{}
-	cache.On("Get", mock_.Anything).Return("", false)
-	cache.On("Set", mock_.Anything, mock_.Anything, mock_.Anything).Return(nil)
-	env.On("Cache").Return(cache)
-
 	if args.properties == nil {
 		args.properties = properties.Map{}
 	}
 
-	l := &language{
+	l := &Language{
 		extensions:         args.extensions,
 		commands:           args.commands,
 		versionURLTemplate: args.versionURLTemplate,
@@ -545,11 +538,6 @@ func getMockedLanguageEnv(params *mockedLanguageParams) (*mock.Environment, prop
 	env.On("Pwd").Return("/usr/home/project")
 	env.On("Home").Return("/usr/home")
 
-	cache := &cache_.Cache{}
-	cache.On("Get", mock_.Anything).Return("", false)
-	cache.On("Set", mock_.Anything, mock_.Anything, mock_.Anything).Return(nil)
-	env.On("Cache").Return(cache)
-
 	props := properties.Map{
 		properties.FetchVersion: true,
 	}
@@ -578,7 +566,7 @@ func TestNodePackageVersion(t *testing.T) {
 		env.On("HasFilesInDir", path, "package.json").Return(!tc.NoFiles)
 		env.On("FileContent", filepath.Join(path, "package.json")).Return(tc.PackageJSON)
 
-		a := &language{}
+		a := &Language{}
 		a.Init(properties.Map{}, env)
 		got, err := a.nodePackageVersion("nx")
 

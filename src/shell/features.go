@@ -1,8 +1,6 @@
 package shell
 
-import (
-	"strconv"
-)
+import "fmt"
 
 type Features uint
 
@@ -59,7 +57,7 @@ func (f Features) Lines(shell string) Lines {
 		var code Code
 
 		switch shell {
-		case PWSH, PWSH5:
+		case PWSH:
 			code = feature.Pwsh()
 		case ZSH:
 			code = feature.Zsh()
@@ -85,6 +83,6 @@ func (f Features) Lines(shell string) Lines {
 	return lines
 }
 
-func (f Features) Hash() string {
-	return strconv.FormatUint(uint64(f), 10)
+func (f Features) String() string {
+	return fmt.Sprintf("%b", uint(f))
 }

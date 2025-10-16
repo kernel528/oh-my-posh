@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"os"
+
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/auth"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
@@ -27,13 +30,17 @@ Available services:
 		}
 
 		flags := &runtime.Flags{
-			Shell:     shellName,
-			SaveCache: true,
+			Shell: os.Getenv("POSH_SHELL"),
 		}
 
 		env := &runtime.Terminal{}
 		env.Init(flags)
-		defer env.Close()
+
+		cache.Init(env.Shell(), cache.Persist)
+
+		defer func() {
+			cache.Close()
+		}()
 
 		switch args[0] {
 		case "ytmda":
