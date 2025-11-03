@@ -62,7 +62,7 @@ See the documentation to initialize your shell: https://ohmyposh.dev/docs/instal
 	initCmd.Flags().BoolVarP(&printOutput, "print", "p", false, "print the init script")
 	initCmd.Flags().BoolVarP(&strict, "strict", "s", false, "run in strict mode")
 	initCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
-	initCmd.Flags().BoolVar(&eval, "eval", false, "output the prompt for eval")
+	initCmd.Flags().BoolVar(&eval, "eval", false, "output the full init script for eval")
 
 	_ = initCmd.MarkPersistentFlagRequired("config")
 
@@ -74,7 +74,11 @@ func runInit(sh, command string) {
 		log.Enable(plain)
 	}
 
-	cache.Init(sh, cache.NewSession, cache.Persist)
+	if sh == "powershell" {
+		sh = shell.PWSH
+	}
+
+	initCache(sh)
 
 	cfg := config.Load(configFlag, false)
 
@@ -160,4 +164,18 @@ func getFullCommand(cmd *cobra.Command, args []string) string {
 	})
 
 	return cmdPath
+}
+
+func initCache(sh string) {
+	switch {
+	case !printOutput:
+		if (eval && sh == shell.PWSH) || sh == shell.ELVISH {
+			cache.Init(sh)
+			return
+		}
+
+		fallthrough
+	default:
+		cache.Init(sh, cache.NewSession, cache.Persist)
+	}
 }

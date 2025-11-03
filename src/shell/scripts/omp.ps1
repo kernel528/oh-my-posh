@@ -1,4 +1,4 @@
-﻿# remove any existing dynamic module of OMP
+# remove any existing dynamic module of OMP
 if ($null -ne (Get-Module -Name "oh-my-posh-core")) {
     Remove-Module -Name "oh-my-posh-core" -Force
 }
@@ -36,7 +36,7 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
     $script:NoExitCode = $true
     $script:ErrorCode = 0
     $script:ExecutionTime = 0
-    $script:ShellName = "::SHELL::"
+    $script:ShellName = "pwsh"
     $script:PSVersion = $PSVersionTable.PSVersion.ToString()
     $script:TransientPrompt = $false
     $script:TooltipCommand = ''
@@ -250,6 +250,9 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
         # store the orignal last exit code
         $script:OriginalLastExitCode = $global:LASTEXITCODE
 
+        # Reset tooltip command.
+        $script:TooltipCommand = ''
+
         Set-PoshPromptType
 
         if ($script:PromptType -ne 'transient') {
@@ -351,7 +354,6 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
                     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$null, [ref]$null, [ref]$parseErrors, [ref]$null)
                     $executingCommand = $parseErrors.Count -eq 0
                     if ($executingCommand) {
-                        Set-Variable -Name TooltipCommand -Value '' -Scope Script
                         Set-TransientPrompt
                     }
                 }
@@ -376,7 +378,6 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
                     [Microsoft.PowerShell.PSConsoleReadLine]::GetSelectionState([ref]$start, [ref]$null)
                     # only render a transient prompt when no text is selected
                     if ($start -eq -1) {
-                        Set-Variable -Name TooltipCommand -Value '' -Scope Script
                         Set-TransientPrompt
                     }
                 }

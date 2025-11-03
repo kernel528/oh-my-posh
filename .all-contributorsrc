@@ -3303,6 +3303,35 @@
       "contributions": [
         "doc"
       ]
+    },
+    {
+      "login": "sanki92",
+      "name": "Sankalp Tripathi",
+      "avatar_url": "https://avatars.githubusercontent.com/u/70330866?v=4",
+      "profile": "https://github.com/sanki92",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "MariusStorhaug",
+      "name": "Marius Storhaug",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17722253?v=4",
+      "profile": "https://github.com/PSModule",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "ADIX7",
+      "name": "Kovács Ádám",
+      "avatar_url": "https://avatars.githubusercontent.com/u/10939090?v=4",
+      "profile": "https://github.com/ADIX7",
+      "contributions": [
+        "doc",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
