@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository (with tags)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
@@ -109,15 +109,52 @@ jobs:
           echo "  ✅ Detailed commits: $(wc -l < commits_detailed.txt) lines"
           git diff --name-status "${BASE}..${HEAD}" | head -n 1000 > files_changed.txt || true
           echo "  ✅ Changed files: $(wc -l < files_changed.txt) files"
-          # Extract contributors as "Name <email>" then strip email and create GitHub profile links
+          # Extract contributors, exclude Jan De Dobbeleer and bots, format as GitHub profile links
           git shortlog -sne "${BASE}..${HEAD}" | sed -E 's/^ *[0-9]+\t//g' | while IFS= read -r line; do
-            # Extract name (everything before the email)
             name=$(echo "$line" | sed -E 's/ *<.*//g')
-            # Extract email username (before @) as GitHub username approximation
+            # Skip Jan De Dobbeleer and common bots
+            if [[ "$name" =~ ^(Jan De Dobbeleer|dependabot|renovate|github-actions|Renovate Bot|dependabot\[bot\]|github-actions\[bot\]|allcontributors\[bot\])$ ]]; then
+              continue
+            fi
             username=$(echo "$line" | sed -E 's/.*<([^@]+)@.*/\1/g')
             echo "- [@${username}](https://github.com/${username}) (${name})"
           done | head -n 200 > contributors.txt || true
           echo "  ✅ Contributors: $(wc -l < contributors.txt) people"
+
+      - name: Collect issue context
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BASE="${{ steps.diff.outputs.base_ref }}"
+          HEAD="${{ steps.diff.outputs.curr_ref }}"
+          echo "🔍 Collecting issue context for referenced issues"
+          > issues_context.txt
+          # Extract issue numbers from commit messages (e.g., fixes #123, closes #456, #789)
+          ISSUE_NUMBERS=$(git log --no-merges --pretty=format:'%s %b' "${BASE}..${HEAD}" | \
+            grep -oiE '(fix(es|ed)?|close(s|d)?|resolve(s|d)?)?[[:space:]]*#[0-9]+' | \
+            grep -oE '[0-9]+' | sort -u || true)
+          if [ -z "$ISSUE_NUMBERS" ]; then
+            echo "  No issues referenced in commits"
+          else
+            COUNT=0
+            for NUM in $ISSUE_NUMBERS; do
+              echo "  Fetching issue #$NUM..."
+              if ISSUE_DATA=$(gh api "repos/${{ github.repository }}/issues/$NUM" 2>/dev/null); then
+                TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+                BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""' | head -c 1000)
+                LABELS=$(echo "$ISSUE_DATA" | jq -r '.labels[]?.name' | tr '\n' ', ' | sed 's/,$//')
+                echo "---" >> issues_context.txt
+                echo "Issue #$NUM: $TITLE" >> issues_context.txt
+                [ -n "$LABELS" ] && echo "Labels: $LABELS" >> issues_context.txt
+                echo "$BODY" >> issues_context.txt
+                echo "" >> issues_context.txt
+                COUNT=$((COUNT + 1))
+              fi
+            done
+            echo "  ✅ Collected context for $COUNT issues"
+          fi
 
       - name: Generate enhanced changelog with AI
         id: ai
@@ -128,11 +165,19 @@ jobs:
           set -euo pipefail
           set -a; source ctx.env; set +a
           echo "🤖 Generating enhanced changelog with AI"
-          MODEL="openai/gpt-4o-mini"
+          MODEL="openai/gpt-4.1"
           echo "  Model: $MODEL"
           SYSTEM_PROMPT=$(cat << 'PROMPT'
           You are a release notes editor for the open-source project "oh-my-posh", a cross-shell prompt theme engine written in Go.
-          Write a clear, human-friendly Markdown changelog for this release. Use concise language and organize with headings.
+          Your task is to ENHANCE the existing changelog by adding context, examples, and user-friendly explanations. DO NOT create a new changelog from scratch.
+
+          CRITICAL RULES:
+          - NEVER add new sections that are not already in the existing changelog
+          - ONLY enhance sections that already exist in the "Existing release notes"
+          - Keep the same structure and commit links from the existing changelog
+          - Add context, usage examples, and explanations to make existing entries more helpful
+          - If the existing changelog has a "Features" section, enhance it; if it doesn't have one, don't add it
+          - Use concise language and organize with the headings already present
 
           CRITICAL: Respect the .versionrc.json configuration:
           - ONLY include these sections with these exact names:
@@ -143,26 +188,37 @@ jobs:
             * "Themes" (for theme: commits)
           - DO NOT include chore, ci, docs, perf, or test commits (marked as hidden in .versionrc.json)
           - Use ONLY the section names specified above, not generic names like "Other"
-          - ONLY show sections that have actual changes - omit empty sections entirely
+          - CRITICAL: DO NOT include a section if there are no changes for it - completely omit empty sections
+          - NEVER write placeholder text like "No new themes" or "No changes in this category" - just skip the entire section
 
           Segment changes (public-facing):
-          - When you see changes to src/segments/*.go files (excluding *_test.go), these are prompt segments that users configure
+          - ONLY when you see changes to files in the EXACT path src/segments/*.go (excluding *_test.go), these are prompt segments that users configure
+          - Changes to other paths like src/dsc/, src/config/, src/engine/, etc. are NOT segments - they are internal implementation details
           - A segment is a customizable component users add to their shell prompt (e.g., git status, battery level, current directory)
+          - Refer to .github/instructions/segment.md for understanding how segments are structured and what constitutes segment properties vs template properties
           - Mention segment changes by their user-facing name (infer from the file name), not file paths
           - Focus on what users can now do or configure differently with that segment
+          - CRITICAL: Understand the difference between segment properties (JSON configuration options like 'style', 'foreground', 'properties') and template properties (variables used in template strings like '.ChangeID', '.Working')
+          - When a change adds a new template property (e.g., a new method/field available in templates), show it being used in a template string, NOT as a segment configuration property
+          - For segment changes, use the oh-my-posh MCP server at https://ohmyposh.dev/api/mcp to generate JSON code snippets showing example configurations or segment usage
+          - Every snippet (configuration or segment) MUST be validated using the MCP server before adding it to the changelog
+          - If a snippet cannot be created or validated correctly using the MCP server, discard that snippet and continue processing other changes
+          - Include validated snippets as practical examples to help users understand how to use the new or modified segment features
 
           Goals:
+          - ENHANCE the existing changelog entries with helpful context and examples
+          - DO NOT add new sections or restructure the existing changelog
           - Summarize highlights up front with context and impact
-          - Group changes ONLY by the section names from .versionrc.json above (skip empty sections)
+          - Keep the exact same section headings that already exist in the "Existing release notes"
           - Call out breaking changes and required migrations with explicit before/after examples or commands
           - Add practical usage notes or snippets to help users adopt new features or changes
           - For segment changes, explain the user-facing impact (e.g., "The Git segment now supports...")
-          - Credit contributors at the end with GitHub profile links (EXCLUDE: Jan De Dobbeleer, bots like dependabot, renovate, github-actions)
-          - Contributors are provided as Markdown links, use them as-is without modification
+          - Credit contributors at the end (they are pre-filtered and formatted as GitHub profile links) - ONLY if contributors list is not empty
           - Include a "Full diff" link footer
 
           Requirements:
-          - Output valid Markdown only, no front matter, no HTML
+          - Output valid Markdown only, no front matter, no HTML, no title heading
+          - Do not include a title like "Changelog for vX.Y.Z" - start directly with the content
           - Keep to ~300-800 words unless there are many breaking changes
           - Prefer code blocks for examples with proper language tags (bash, json, yaml, toml, powershell)
           - Do not invent features not present in the commits/diff
@@ -173,12 +229,13 @@ jobs:
           REPO="${{ github.repository }}"
           COMPARE_URL="${{ steps.diff.outputs.compare_url }}"
           CURR="$CURRENT_TAG"
-          if PREV=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null); then :; else PREV="<none>"; fi
+          PREV="${{ steps.diff.outputs.base_ref }}"
           EXISTING=$(cat existing_notes.md || true)
           SUBJECTS="$(cat commits_subjects.txt || true)"
           DETAILS="$(cat commits_detailed.txt || true)"
           FILES="$(cat files_changed.txt || true)"
           CONTRIBUTORS="$(cat contributors.txt || true)"
+          ISSUES_CONTEXT="$(cat issues_context.txt || true)"
           VERSIONRC="$(cat .versionrc.json || echo '{}')"
           USER_CONTENT=$(cat << EOF
           Repository: ${REPO}
@@ -212,6 +269,11 @@ jobs:
           ${FILES}
           ---
 
+          Referenced issues (for additional context, explain impact in user terms):
+          ---
+          ${ISSUES_CONTEXT}
+          ---
+
           Contributors:
           ---
           ${CONTRIBUTORS}
@@ -240,16 +302,8 @@ jobs:
             exit 0
           fi
           echo "  Generated changelog length: $(printf "%s" "$OUTPUT_MD" | wc -c) characters"
-          # Wrap with markers for idempotent updates and include compare link
-          {
-            echo "<!-- AI-ENHANCED-CHANGELOG:START -->"
-            echo ""
-            echo "$OUTPUT_MD"
-            echo ""
-            echo "_Full diff: ${COMPARE_URL}_"
-            echo ""
-            echo "<!-- AI-ENHANCED-CHANGELOG:END -->"
-          } > enhanced_changelog.md
+          # Save the AI-generated changelog
+          echo "$OUTPUT_MD" > enhanced_changelog.md
           echo "✅ Enhanced changelog saved to enhanced_changelog.md"
           echo "enhanced_body<<EOF" >> "$GITHUB_OUTPUT"
           cat enhanced_changelog.md >> "$GITHUB_OUTPUT"

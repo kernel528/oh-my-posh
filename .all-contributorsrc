@@ -3272,7 +3272,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/26114636?v=4",
       "profile": "https://gijsreijn.medium.com/",
       "contributions": [
-        "code"
+        "code",
+        "doc"
       ]
     },
     {
@@ -3331,6 +3332,15 @@
       "contributions": [
         "doc",
         "code"
+      ]
+    },
+    {
+      "login": "spidersouris",
+      "name": "Enzo Doyen",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7102007?v=4",
+      "profile": "https://www.edoyen.com/",
+      "contributions": [
+        "doc"
       ]
     }
   ],
