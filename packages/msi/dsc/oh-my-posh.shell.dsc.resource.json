@@ -32,13 +32,12 @@
   "set": {
     "executable": "oh-my-posh",
     "implementsPretest": true,
-    "return": "stateAndDiff",
     "args": [
       "shell",
       "dsc",
       "set",
       {
-        "jsonInputArg": "--schema",
+        "jsonInputArg": "--state",
         "mandatory": true
       }
     ]

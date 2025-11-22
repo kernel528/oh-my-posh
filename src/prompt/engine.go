@@ -115,6 +115,11 @@ func (e *Engine) pwd() {
 		return
 	}
 
+	// Convert to Windows path when in WSL
+	if e.Env.IsWsl() {
+		pwd = e.Env.ConvertToWindowsPath(pwd)
+	}
+
 	user := e.Env.User()
 	host, _ := e.Env.Host()
 	e.write(terminal.Pwd(pwdType, user, host, pwd))
@@ -487,7 +492,7 @@ func New(flags *runtime.Flags) *Engine {
 	env := &runtime.Terminal{}
 	env.Init(flags)
 
-	_, reload := cache.Get[bool](cache.Device, config.RELOAD)
+	reload, _ := cache.Get[bool](cache.Device, config.RELOAD)
 	cfg := config.Get(flags.ConfigPath, reload)
 
 	template.Init(env, cfg.Var, cfg.Maps)
