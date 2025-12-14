@@ -67,6 +67,7 @@ module.exports = {
             "segments/cli/buf",
             "segments/cli/bun",
             "segments/cli/cmake",
+            "segments/cli/copilot",
             "segments/cli/deno",
             "segments/cli/docker",
             "segments/cli/firebase",
@@ -182,7 +183,6 @@ module.exports = {
           collapsed: true,
           items: [
             "segments/system/battery",
-            "segments/system/command",
             "segments/system/connection",
             "segments/system/executiontime",
             "segments/system/os",

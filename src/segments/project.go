@@ -8,12 +8,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/gookit/goutil/jsonutil"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 
 	toml "github.com/pelletier/go-toml/v2"
-	yaml "gopkg.in/yaml.v3"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 type ProjectItem struct {
@@ -68,6 +69,16 @@ func (n *Project) Enabled() bool {
 			Fetcher: n.getNodePackage,
 		},
 		{
+			Name:    "deno",
+			Files:   []string{"deno.json", "deno.jsonc"},
+			Fetcher: n.getDenoPackage,
+		},
+		{
+			Name:    "jsr",
+			Files:   []string{"jsr.json", "jsr.jsonc"},
+			Fetcher: n.getJsrPackage,
+		},
+		{
 			Name:    "cargo",
 			Files:   []string{"Cargo.toml"},
 			Fetcher: n.getCargoPackage,
@@ -116,8 +127,8 @@ func (n *Project) Enabled() bool {
 
 	for _, item := range n.projects {
 		// allow files override
-		property := properties.Property(fmt.Sprintf("%s_files", item.Name))
-		item.Files = n.props.GetStringArray(property, item.Files)
+		property := options.Option(fmt.Sprintf("%s_files", item.Name))
+		item.Files = n.options.StringArray(property, item.Files)
 
 		if !n.hasProjectFile(item) {
 			continue
@@ -133,7 +144,7 @@ func (n *Project) Enabled() bool {
 		return true
 	}
 
-	return n.props.GetBool(properties.AlwaysEnabled, false)
+	return n.options.Bool(options.AlwaysEnabled, false)
 }
 
 func (n *Project) Template() string {
@@ -145,16 +156,40 @@ func (n *Project) hasProjectFile(p *ProjectItem) bool {
 }
 
 func (n *Project) getNodePackage(item ProjectItem) *ProjectData {
-	content := n.env.FileContent(item.Files[0])
+	return n.getJSONPackage(item, false)
+}
 
-	var data ProjectData
-	err := json.Unmarshal([]byte(content), &data)
-	if err != nil {
-		n.Error = err.Error()
+func (n *Project) getDenoPackage(item ProjectItem) *ProjectData {
+	data := n.getJSONPackage(item, true)
+	if data == nil {
 		return nil
 	}
 
-	return &data
+	// Deno projects prefer to publish via JSR; merge JSR metadata when available.
+	jsrFile := n.firstExistingFile([]string{"jsr.json", "jsr.jsonc"})
+	if len(jsrFile) == 0 {
+		return data
+	}
+
+	jsrData, err := n.parseJSONPackage(jsrFile, true)
+	if err != nil {
+		log.Error(err)
+		return data
+	}
+
+	if len(jsrData.Version) != 0 {
+		data.Version = jsrData.Version
+	}
+
+	if len(jsrData.Name) != 0 {
+		data.Name = jsrData.Name
+	}
+
+	return data
+}
+
+func (n *Project) getJsrPackage(item ProjectItem) *ProjectData {
+	return n.getJSONPackage(item, true)
 }
 
 func (n *Project) getCargoPackage(item ProjectItem) *ProjectData {
@@ -324,4 +359,45 @@ func (n *Project) getProjectData(item ProjectItem) *ProjectData {
 	}
 
 	return &data
+}
+
+func (n *Project) getJSONPackage(item ProjectItem, allowJSONC bool) *ProjectData {
+	file := n.firstExistingFile(item.Files)
+	if len(file) == 0 {
+		return nil
+	}
+
+	data, err := n.parseJSONPackage(file, allowJSONC)
+	if err != nil {
+		n.Error = err.Error()
+		return nil
+	}
+
+	return data
+}
+
+func (n *Project) firstExistingFile(files []string) string {
+	for _, file := range files {
+		if !n.env.HasFiles(file) {
+			continue
+		}
+		return file
+	}
+
+	return ""
+}
+
+func (n *Project) parseJSONPackage(file string, allowJSONC bool) (*ProjectData, error) {
+	content := n.env.FileContent(file)
+	if allowJSONC && filepath.Ext(file) == ".jsonc" {
+		content = jsonutil.StripComments(content)
+	}
+
+	var data ProjectData
+	err := json.Unmarshal([]byte(content), &data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }
