@@ -21,13 +21,13 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 
 	toml "github.com/pelletier/go-toml/v2"
-	yaml "gopkg.in/yaml.v3"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // custom no config error
 var ErrNoConfig = errors.New("no config file specified")
 
-func Load(configFile string, migrate bool) *Config {
+func Load(configFile string) *Config {
 	defer log.Trace(time.Now())
 
 	if configFile == "" {
@@ -38,12 +38,11 @@ func Load(configFile string, migrate bool) *Config {
 
 	cfg := parseConfigFile(configFile)
 
-	cfg.toggleSegments()
+	// Migrate segment properties to options for TOML configs
+	// (go-toml/v2 doesn't support custom unmarshalers)
+	cfg.migrateSegmentProperties()
 
-	// only migrate automatically when the switch isn't set
-	if !migrate && cfg.Version < Version {
-		cfg.BackupAndMigrate()
-	}
+	cfg.toggleSegments()
 
 	cfg.Source = configFile
 

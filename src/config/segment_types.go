@@ -4,9 +4,9 @@ import (
 	"encoding/gob"
 	"errors"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 )
 
 // SegmentType the type of segment, for more information, see the constants
@@ -19,7 +19,7 @@ type SegmentWriter interface {
 	SetText(text string)
 	SetIndex(index int)
 	Text() string
-	Init(props properties.Properties, env runtime.Environment)
+	Init(props options.Provider, env runtime.Environment)
 	CacheKey() (string, bool)
 }
 
@@ -39,10 +39,10 @@ func init() {
 	gob.Register(&segments.Bun{})
 	gob.Register(&segments.CarbonIntensity{})
 	gob.Register(&segments.Cds{})
+	gob.Register(&segments.Copilot{})
 	gob.Register(&segments.Cf{})
 	gob.Register(&segments.CfTarget{})
 	gob.Register(&segments.Cmake{})
-	gob.Register(&segments.Cmd{})
 	gob.Register(&segments.Connection{})
 	gob.Register(&segments.Crystal{})
 	gob.Register(&segments.Dart{})
@@ -187,10 +187,10 @@ const (
 	CFTARGET SegmentType = "cftarget"
 	// CMAKE writes the active cmake version
 	CMAKE SegmentType = "cmake"
-	// CMD writes the output of a shell command
-	CMD SegmentType = "command"
 	// CONNECTION writes a connection's information
 	CONNECTION SegmentType = "connection"
+	// COPILOT writes GitHub Copilot usage statistics
+	COPILOT SegmentType = "copilot"
 	// CRYSTAL writes the active crystal version
 	CRYSTAL SegmentType = "crystal"
 	// DART writes the active dart version
@@ -381,8 +381,8 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	CF:              func() SegmentWriter { return &segments.Cf{} },
 	CFTARGET:        func() SegmentWriter { return &segments.CfTarget{} },
 	CMAKE:           func() SegmentWriter { return &segments.Cmake{} },
-	CMD:             func() SegmentWriter { return &segments.Cmd{} },
 	CONNECTION:      func() SegmentWriter { return &segments.Connection{} },
+	COPILOT:         func() SegmentWriter { return &segments.Copilot{} },
 	CRYSTAL:         func() SegmentWriter { return &segments.Crystal{} },
 	DART:            func() SegmentWriter { return &segments.Dart{} },
 	DENO:            func() SegmentWriter { return &segments.Deno{} },
@@ -472,8 +472,8 @@ var Segments = map[SegmentType]func() SegmentWriter{
 func (segment *Segment) MapSegmentWithWriter(env runtime.Environment) error {
 	segment.env = env
 
-	if segment.Properties == nil {
-		segment.Properties = make(properties.Map)
+	if segment.Options == nil {
+		segment.Options = make(options.Map)
 	}
 
 	f, ok := Segments[segment.Type]
@@ -482,11 +482,7 @@ func (segment *Segment) MapSegmentWithWriter(env runtime.Environment) error {
 	}
 
 	writer := f()
-	wrapper := &properties.Wrapper{
-		Properties: segment.Properties,
-	}
-
-	writer.Init(wrapper, env)
+	writer.Init(segment.Options, env)
 	segment.writer = writer
 
 	return nil
