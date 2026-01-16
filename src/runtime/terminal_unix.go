@@ -81,6 +81,13 @@ func (term *Terminal) TerminalWidth() (int, error) {
 
 	term.CmdFlags.TerminalWidth = int(width)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
+
+	// Claude CLI has a 2 character padding on both sides
+	if term.CmdFlags.Shell == "claude" {
+		log.Debug("adjusting terminal width for Claude CLI")
+		term.CmdFlags.TerminalWidth -= 4
+	}
+
 	return term.CmdFlags.TerminalWidth, err
 }
 
@@ -96,7 +103,8 @@ func (term *Terminal) Platform() string {
 	}()
 
 	if wsl := term.Getenv("WSL_DISTRO_NAME"); len(wsl) != 0 {
-		platform = strings.Split(strings.ToLower(wsl), "-")[0]
+		platform, _, _ := strings.Cut(wsl, "-")
+		platform = strings.ToLower(platform)
 		log.Debug(platform)
 		return platform
 	}

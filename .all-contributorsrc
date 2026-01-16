@@ -289,7 +289,9 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/48369326?v=4",
       "profile": "https://github.com/cinnamon-msft",
       "contributions": [
-        "design"
+        "design",
+        "code",
+        "doc"
       ]
     },
     {
@@ -3253,7 +3255,8 @@
       "profile": "https://github.com/JamBalaya56562",
       "contributions": [
         "doc",
-        "code"
+        "code",
+        "design"
       ]
     },
     {
@@ -3362,6 +3365,54 @@
         "code",
         "design",
         "doc"
+      ]
+    },
+    {
+      "login": "anujsrc",
+      "name": "Anuj Kumar",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001682?v=4",
+      "profile": "http://linkedin.com/in/anujsays",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "ValerioCeccarelli",
+      "name": "Valerio Ceccarelli",
+      "avatar_url": "https://avatars.githubusercontent.com/u/42637334?v=4",
+      "profile": "https://github.com/ValerioCeccarelli",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "jvsca",
+      "name": "Juan Svaikauskas",
+      "avatar_url": "https://avatars.githubusercontent.com/u/2821731?v=4",
+      "profile": "https://github.com/jvsca",
+      "contributions": [
+        "design"
+      ]
+    },
+    {
+      "login": "johnstegeman",
+      "name": "John Stegeman",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6601691?v=4",
+      "profile": "https://www.linkedin.com/in/johnstegeman/",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "gorfey",
+      "name": "Luke Van De Weghe",
+      "avatar_url": "https://avatars.githubusercontent.com/u/39035228?v=4",
+      "profile": "https://github.com/gorfey",
+      "contributions": [
+        "code"
       ]
     }
   ],

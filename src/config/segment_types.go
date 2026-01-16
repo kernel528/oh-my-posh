@@ -42,6 +42,9 @@ func init() {
 	gob.Register(&segments.Copilot{})
 	gob.Register(&segments.Cf{})
 	gob.Register(&segments.CfTarget{})
+	gob.Register(&segments.Claude{})
+	gob.Register(&segments.ClaudeData{})
+	gob.Register(&segments.Clojure{})
 	gob.Register(&segments.Cmake{})
 	gob.Register(&segments.Connection{})
 	gob.Register(&segments.Crystal{})
@@ -135,6 +138,8 @@ func init() {
 	gob.Register(&segments.V{})
 	gob.Register(&segments.Vala{})
 	gob.Register(&segments.Wakatime{})
+	gob.Register(&segments.WinGet{})
+	gob.Register(&segments.WinGetPackage{})
 	gob.Register(&segments.WindowsRegistry{})
 	gob.Register(&segments.Withings{})
 	gob.Register(&segments.XMake{})
@@ -185,6 +190,10 @@ const (
 	CF SegmentType = "cf"
 	// Cloud Foundry logged in target
 	CFTARGET SegmentType = "cftarget"
+	// CLAUDE writes Claude Code session information
+	CLAUDE SegmentType = "claude"
+	// CLOJURE writes the active clojure version
+	CLOJURE SegmentType = "clojure"
 	// CMAKE writes the active cmake version
 	CMAKE SegmentType = "cmake"
 	// CONNECTION writes a connection's information
@@ -347,6 +356,8 @@ const (
 	VALA SegmentType = "vala"
 	// WAKATIME writes tracked time spend in dev editors
 	WAKATIME SegmentType = "wakatime"
+	// WINGET writes the number of available WinGet package updates
+	WINGET SegmentType = "winget"
 	// WINREG queries the Windows registry.
 	WINREG SegmentType = "winreg"
 	// WITHINGS queries the Withings API.
@@ -380,6 +391,8 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	CDS:             func() SegmentWriter { return &segments.Cds{} },
 	CF:              func() SegmentWriter { return &segments.Cf{} },
 	CFTARGET:        func() SegmentWriter { return &segments.CfTarget{} },
+	CLAUDE:          func() SegmentWriter { return &segments.Claude{} },
+	CLOJURE:         func() SegmentWriter { return &segments.Clojure{} },
 	CMAKE:           func() SegmentWriter { return &segments.Cmake{} },
 	CONNECTION:      func() SegmentWriter { return &segments.Connection{} },
 	COPILOT:         func() SegmentWriter { return &segments.Copilot{} },
@@ -461,6 +474,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	V:               func() SegmentWriter { return &segments.V{} },
 	VALA:            func() SegmentWriter { return &segments.Vala{} },
 	WAKATIME:        func() SegmentWriter { return &segments.Wakatime{} },
+	WINGET:          func() SegmentWriter { return &segments.WinGet{} },
 	WINREG:          func() SegmentWriter { return &segments.WindowsRegistry{} },
 	WITHINGS:        func() SegmentWriter { return &segments.Withings{} },
 	XMAKE:           func() SegmentWriter { return &segments.XMake{} },

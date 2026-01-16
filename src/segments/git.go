@@ -61,22 +61,26 @@ func (s *GitStatus) add(code string) {
 }
 
 const (
-	// DisableWithJJ disables the git segment when there's a .jj directory in the parent file path
-	DisableWithJJ options.Option = "disable_with_jj"
 	// FetchStatus fetches the status of the repository
 	FetchStatus options.Option = "fetch_status"
 	// FetchPushStatus fetches the push-remote status
 	FetchPushStatus options.Option = "fetch_push_status"
 	// IgnoreStatus allows to ignore certain repo's for status information
 	IgnoreStatus options.Option = "ignore_status"
-	// FetchWorktreeCount fetches the worktree count
-	FetchWorktreeCount options.Option = "fetch_worktree_count"
 	// FetchUpstreamIcon fetches the upstream icon
 	FetchUpstreamIcon options.Option = "fetch_upstream_icon"
 	// FetchBareInfo fetches the bare repo status
 	FetchBareInfo options.Option = "fetch_bare_info"
 	// FetchUser fetches the current user for the repo
 	FetchUser options.Option = "fetch_user"
+	// UntrackedModes list the optional untracked files mode per repo
+	UntrackedModes options.Option = "untracked_modes"
+	// IgnoreSubmodules list the optional ignore-submodules mode per repo
+	IgnoreSubmodules options.Option = "ignore_submodules"
+	// MappedBranches allows overriding certain branches with an icon/text
+	MappedBranches options.Option = "mapped_branches"
+	// DisableWithJJ disables the git segment when there's a .jj directory in the parent file path
+	DisableWithJJ options.Option = "disable_with_jj"
 
 	// BranchIcon the icon to use as branch indicator
 	BranchIcon options.Option = "branch_icon"
@@ -118,12 +122,6 @@ const (
 	GitlabIcon options.Option = "gitlab_icon"
 	// GitIcon shows when the upstream can't be identified
 	GitIcon options.Option = "git_icon"
-	// UntrackedModes list the optional untracked files mode per repo
-	UntrackedModes options.Option = "untracked_modes"
-	// IgnoreSubmodules list the optional ignore-submodules mode per repo
-	IgnoreSubmodules options.Option = "ignore_submodules"
-	// MappedBranches allows overriding certain branches with an icon/text
-	MappedBranches options.Option = "mapped_branches"
 
 	DETACHED     = "(detached)"
 	BRANCHPREFIX = "ref: refs/heads/"
@@ -322,9 +320,7 @@ func (g *Git) StashCount() int {
 
 func (g *Git) Kraken() string {
 	root := g.getGitCommandOutput("rev-list", "--max-parents=0", "HEAD")
-	if strings.Contains(root, "\n") {
-		root = strings.Split(root, "\n")[0]
-	}
+	root, _, _ = strings.Cut(root, "\n")
 
 	if g.RawUpstreamURL == "" {
 		if g.Upstream == "" {
@@ -650,7 +646,7 @@ func (g *Git) cleanUpstreamURL(url string) string {
 	}
 
 	// ssh://user@host.xz:1234/path/to/repo.git/
-	match = regex.FindNamedRegexMatch(`(ssh|ftp|git|rsync)://(.*@)?(?P<URL>[a-z0-9.-]+)(:[0-9]{4})?/(?P<PATH>.*).git`, url)
+	match = regex.FindNamedRegexMatch(`(ssh|ftp|git|rsync)://(.*@)?(?P<URL>[a-z0-9.-]+)(:[0-9]{1,5})?/(?P<PATH>.*).git`, url)
 	if len(match) == 0 {
 		// host.xz:/path/to/repo.git/
 		match = regex.FindNamedRegexMatch(`^(?P<URL>[a-z0-9.-]+):(?P<PATH>[\w.\-~/@]+)$`, url)
@@ -678,9 +674,11 @@ func (g *Git) cleanUpstreamURL(url string) string {
 }
 
 func (g *Git) getUpstreamIcon() string {
+	fallback := g.options.String(GitIcon, "\uE5FB ")
+
 	g.RawUpstreamURL = g.getRemoteURL()
 	if g.RawUpstreamURL == "" {
-		return ""
+		return fallback
 	}
 
 	g.UpstreamURL = g.cleanUpstreamURL(g.RawUpstreamURL)
@@ -705,12 +703,14 @@ func (g *Git) getUpstreamIcon() string {
 		"codecommit":       {CodeCommit, "\uF270"},
 		"codeberg":         {CodebergIcon, "\uF330"},
 	}
+
 	for key, value := range defaults {
 		if strings.Contains(g.UpstreamURL, key) {
 			return g.options.String(value.Icon, value.Default)
 		}
 	}
-	return g.options.String(GitIcon, "\uE5FB ")
+
+	return fallback
 }
 
 func (g *Git) setStatus() {

@@ -63,7 +63,7 @@ type Segment struct {
 	ExcludeFolders         []string       `json:"exclude_folders,omitempty" toml:"exclude_folders,omitempty" yaml:"exclude_folders,omitempty"`
 	IncludeFolders         []string       `json:"include_folders,omitempty" toml:"include_folders,omitempty" yaml:"include_folders,omitempty"`
 	Needs                  []string       `json:"-" toml:"-" yaml:"-"`
-	Timeout                time.Duration  `json:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Timeout                int            `json:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty"`
 	MaxWidth               int            `json:"max_width,omitempty" toml:"max_width,omitempty" yaml:"max_width,omitempty"`
 	MinWidth               int            `json:"min_width,omitempty" toml:"min_width,omitempty" yaml:"min_width,omitempty"`
 	Duration               time.Duration  `json:"-" toml:"-" yaml:"-"`
@@ -195,7 +195,7 @@ func (segment *Segment) Execute(env runtime.Environment) {
 		select {
 		case <-done:
 			// Completed before timeout
-		case <-time.After(segment.Timeout * time.Millisecond):
+		case <-time.After(time.Duration(segment.Timeout) * time.Millisecond):
 			log.Debugf("timeout after %dms for segment: %s", segment.Timeout, segment.Name())
 			return
 		}
@@ -312,10 +312,10 @@ func (segment *Segment) restoreCache() bool {
 		return false
 	}
 
-	cacheKey := segment.cacheKey()
-	data, OK := cache.Get[string](cache.Session, cacheKey)
+	key, store := segment.cacheKeyAndStore()
+	data, OK := cache.Get[string](store, key)
 	if !OK {
-		log.Debugf("no cache found for segment: %s, key: %s", segment.Name(), cacheKey)
+		log.Debugf("no cache found for segment: %s, key: %s", segment.Name(), key)
 		return false
 	}
 
@@ -348,18 +348,21 @@ func (segment *Segment) setCache() {
 	// TODO: check if we can make segmentwriter a generic Type indicator
 	// that way we can actually get the value straight from cache.Get
 	// and marchalling is obsolete
-	cache.Set(cache.Session, segment.cacheKey(), string(data), segment.Cache.Duration)
+	key, store := segment.cacheKeyAndStore()
+	cache.Set(store, key, string(data), segment.Cache.Duration)
 }
 
-func (segment *Segment) cacheKey() string {
+func (segment *Segment) cacheKeyAndStore() (string, cache.Store) {
 	format := "segment_cache_%s"
 	switch segment.Cache.Strategy {
 	case Session:
-		return fmt.Sprintf(format, segment.Name())
+		return fmt.Sprintf(format, segment.Name()), cache.Session
+	case Device:
+		return fmt.Sprintf(format, segment.Name()), cache.Device
 	case Folder:
 		fallthrough
 	default:
-		return fmt.Sprintf(format, strings.Join([]string{segment.Name(), segment.folderKey()}, "_"))
+		return fmt.Sprintf(format, strings.Join([]string{segment.Name(), segment.folderKey()}, "_")), cache.Device
 	}
 }
 
