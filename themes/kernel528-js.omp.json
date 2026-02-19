@@ -34,7 +34,7 @@
           "properties": {
             "cache_duration": "none"
           },
-          "template": "<lightBlue>{{ .UserName }}@{{ .HostName }}</> ",
+          "template": "<lightBlue>{{ .UserName }} @ {{ .HostName }}</> ",
           "type": "session",
           "style": "plain"
         },
