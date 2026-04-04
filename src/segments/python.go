@@ -177,7 +177,7 @@ func (p *Python) pyenvVersion() (string, error) {
 	}
 
 	// override virtualenv if pyenv set one
-	parts := strings.Split(shortPath, string(filepath.Separator))
+	parts := strings.SplitN(shortPath, string(filepath.Separator), 4)
 	if len(parts) > 2 && p.canUseVenvName(parts[2]) {
 		p.Venv = parts[2]
 	}
@@ -214,7 +214,7 @@ func (p *Python) pyvenvCfgPrompt() string {
 		key = strings.TrimSpace(key)
 		if key == "prompt" {
 			value := strings.TrimSpace(value)
-			return value
+			return strings.Trim(value, "\"")
 		}
 	}
 

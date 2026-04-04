@@ -149,7 +149,6 @@ type Git struct {
 	ShortHash      string
 	Hash           string
 	BranchStatus   string
-	Upstream       string
 	HEAD           string
 	UpstreamIcon   string
 	UpstreamURL    string
@@ -313,8 +312,7 @@ func (g *Git) StashCount() int {
 		return 0
 	}
 
-	lines := strings.Split(stashContent, "\n")
-	g.stashCount = len(lines)
+	g.stashCount = strings.Count(stashContent, "\n") + 1 // +1: fileContent() trims
 	return g.stashCount
 }
 
@@ -473,6 +471,8 @@ func (g *Git) hasWorktree(gitdir *runtime.FileInfo) bool {
 			gitDir := filepath.Join(g.scmDir, "gitdir")
 			realGitFolder := g.env.FileContent(gitDir)
 			g.repoRootDir = strings.TrimSuffix(realGitFolder, ".git\n")
+			// resolve relative paths (worktree.useRelativePaths = true)
+			g.repoRootDir = resolveGitPath(g.scmDir, g.repoRootDir)
 			g.scmDir = g.scmDir[:worktreeIndex]
 			g.mainSCMDir = g.scmDir
 			g.IsWorkTree = true
@@ -494,6 +494,8 @@ func (g *Git) hasWorktree(gitdir *runtime.FileInfo) bool {
 		g.scmDir = g.mainSCMDir[:worktreeIndex]
 		gitDirContent := g.env.FileContent(gitDir)
 		g.repoRootDir = strings.TrimSuffix(gitDirContent, ".git\n")
+		// resolve relative paths (worktree.useRelativePaths = true)
+		g.repoRootDir = resolveGitPath(g.mainSCMDir, g.repoRootDir)
 		g.IsWorkTree = true
 		return true
 	}
@@ -783,7 +785,7 @@ func (g *Git) setStatus() {
 
 		if strings.HasPrefix(line, BRANCHSTATUS) && len(line) > len(BRANCHSTATUS) {
 			status := line[len(BRANCHSTATUS):]
-			splitted := strings.Split(status, " ")
+			splitted := strings.SplitN(status, " ", 3)
 			if len(splitted) >= 2 {
 				g.Ahead, _ = strconv.Atoi(splitted[0])
 				behind, _ := strconv.Atoi(splitted[1])

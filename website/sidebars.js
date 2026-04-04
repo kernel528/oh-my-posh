@@ -79,6 +79,7 @@ export default {
             "segments/cli/react",
             "segments/cli/svelte",
             "segments/cli/talosctl",
+            "segments/cli/taskwarrior",
             "segments/cli/tauri",
             "segments/cli/terraform",
             "segments/cli/ui5tooling",
@@ -111,6 +112,7 @@ export default {
           collapsed: true,
           items: [
             "segments/health/nightscout",
+            "segments/health/ramadan",
             "segments/health/strava",
             "segments/health/withings",
           ]
@@ -206,6 +208,7 @@ export default {
             "segments/web/ipify",
             "segments/web/nba",
             "segments/web/owm",
+            "segments/web/todoist",
             "segments/web/wakatime",
           ]
         },
@@ -231,6 +234,14 @@ export default {
       collapsed: true,
       items: [
         "advanced/mcp-server",
+      ],
+    },
+    {
+      type: "category",
+      label: "🧪 Experimental",
+      collapsed: true,
+      items: [
+        "experimental/streaming",
       ],
     },
     "faq",

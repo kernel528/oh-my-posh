@@ -437,6 +437,7 @@
             "python",
             "quasar",
             "r",
+            "ramadan",
             "react",
             "root",
             "ruby",
@@ -453,10 +454,12 @@
             "swift",
             "sysinfo",
             "talosctl",
+            "taskwarrior",
             "tauri",
             "terraform",
             "text",
             "time",
+            "todoist",
             "ui5tooling",
             "umbraco",
             "unity",
@@ -596,6 +599,12 @@
               ]
             }
           }
+        },
+        "placeholder": {
+          "type": "string",
+          "title": "Placeholder text",
+          "description": "Text to display while the segment is loading in streaming mode. See https://ohmyposh.dev/docs/experimental/streaming",
+          "default": "..."
         }
       },
       "allOf": [
@@ -1673,7 +1682,9 @@
                       "houston",
                       "amarillo",
                       "round",
-                      "lucky7"
+                      "lucky7",
+                      "iso8601",
+                      "iso8601ms"
                     ],
                     "default": "austin"
                   }
@@ -2718,6 +2729,80 @@
           "if": {
             "properties": {
               "type": {
+                "const": "ramadan"
+              }
+            }
+          },
+          "then": {
+            "title": "Ramadan Segment",
+            "description": "https://ohmyposh.dev/docs/segments/health/ramadan",
+            "properties": {
+              "options": {
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "title": "Latitude",
+                    "description": "Latitude for prayer time calculation",
+                    "default": 0
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "title": "Longitude",
+                    "description": "Longitude for prayer time calculation",
+                    "default": 0
+                  },
+                  "city": {
+                    "type": "string",
+                    "title": "City",
+                    "description": "City name for location lookup (takes precedence over latitude/longitude)",
+                    "default": ""
+                  },
+                  "country": {
+                    "type": "string",
+                    "title": "Country",
+                    "description": "Country name or ISO 3166 alpha-2 code (required when using city)",
+                    "default": ""
+                  },
+                  "method": {
+                    "type": "integer",
+                    "title": "Calculation Method",
+                    "description": "Prayer calculation method ID (0-23). See https://aladhan.com/calculation-methods",
+                    "default": 3
+                  },
+                  "school": {
+                    "type": "integer",
+                    "title": "Madhab School",
+                    "description": "0 = Shafi (standard), 1 = Hanafi",
+                    "default": 0
+                  },
+                  "hide_outside_ramadan": {
+                    "type": "boolean",
+                    "title": "Hide Outside Ramadan",
+                    "description": "Hide the segment when not in Ramadan",
+                    "default": true
+                  },
+                  "first_roza_date": {
+                    "type": "string",
+                    "title": "First Roza Date",
+                    "description": "Override first day of Ramadan as YYYY-MM-DD for local moon sighting",
+                    "default": ""
+                  },
+                  "http_timeout": {
+                    "type": "integer",
+                    "title": "HTTP request timeout",
+                    "description": "Milliseconds to use for HTTP request timeouts",
+                    "default": 20
+                  }
+                },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "nba"
               }
             }
@@ -3198,6 +3283,18 @@
                     "title": "Ubuntu Icon",
                     "description": "The icon to use for Ubuntu",
                     "default": "\uf31b"
+                  },
+                  "void": {
+                    "type": "string",
+                    "title": "Void Icon",
+                    "description": "The icon to use for Void",
+                    "default": "\uf32e"
+                  },
+                  "zorin": {
+                    "type": "string",
+                    "title": "Zorin Icon",
+                    "description": "The icon to use for Zorin OS",
+                    "default": "\uf32f"
                   }
                 },
                 "unevaluatedProperties": false
@@ -4392,6 +4489,46 @@
           "if": {
             "properties": {
               "type": {
+                "const": "taskwarrior"
+              }
+            }
+          },
+          "then": {
+            "title": "Taskwarrior Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/taskwarrior",
+            "properties": {
+              "options": {
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "title": "Taskwarrior Command",
+                    "description": "The taskwarrior command to use",
+                    "default": "task"
+                  },
+                  "commands": {
+                    "type": "object",
+                    "title": "Commands",
+                    "description": "Map of name to Taskwarrior arguments; the trimmed stdout of each invocation is exposed as .Commands.<Name> in the template",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "due": "+PENDING due.before:tomorrow count",
+                      "scheduled": "+PENDING scheduled.before:tomorrow count",
+                      "waiting": "+WAITING count",
+                      "context": "_get rc.context"
+                    }
+                  }
+                },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "terraform"
               }
             }
@@ -4455,6 +4592,34 @@
                   }
                 },
                 "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "todoist"
+              }
+            }
+          },
+          "then": {
+            "title": "Todoist Segment",
+            "description": "https://ohmyposh.dev/docs/segments/web/todoist",
+            "properties": {
+              "options": {
+                "properties": {
+                  "api_key": {
+                    "type": "string",
+                    "title": "API Key",
+                    "description": "API Key (Required)",
+                    "default": "."
+                  },
+                  "http_timeout": {
+                    "$ref": "#/definitions/http_timeout"
+                  }
+                }
               }
             }
           }
@@ -4953,6 +5118,12 @@
     },
     "terminal_background": {
       "$ref": "#/definitions/color"
+    },
+    "streaming": {
+      "type": "integer",
+      "title": "Streaming Mode",
+      "description": "https://ohmyposh.dev/docs/experimental/streaming",
+      "default": 100
     },
     "blocks": {
       "type": "array",
