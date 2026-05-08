@@ -1,7 +1,9 @@
 package segments
 
 import (
+	"encoding/json"
 	"testing"
+	libtime "time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
@@ -124,8 +126,8 @@ func TestClaudeWorkspaceGitWorktree(t *testing.T) {
 
 	cases := []struct {
 		Case                string
-		Workspace           ClaudeWorkspace
 		ExpectedGitWorktree string
+		Workspace           ClaudeWorkspace
 	}{
 		{
 			Case: "Inside a linked worktree",
@@ -159,6 +161,240 @@ func TestClaudeWorkspaceGitWorktree(t *testing.T) {
 
 		assert.True(t, claude.Enabled(), tc.Case)
 		assert.Equal(t, tc.ExpectedGitWorktree, claude.Workspace.GitWorktree, tc.Case)
+	}
+}
+
+func TestClaudeEffortAndThinking(t *testing.T) {
+	t.Cleanup(func() {
+		cache.Delete(cache.Session, cache.CLAUDECACHE)
+	})
+
+	cases := []struct {
+		Case             string
+		Effort           ClaudeEffort
+		ExpectedLevel    string
+		Thinking         ClaudeThinking
+		ExpectedThinking bool
+	}{
+		{
+			Case:             "Reasoning effort active, thinking enabled",
+			Effort:           ClaudeEffort{Level: "xhigh"},
+			ExpectedLevel:    "xhigh",
+			Thinking:         ClaudeThinking{Enabled: true},
+			ExpectedThinking: true,
+		},
+		{
+			Case:             "Reasoning effort active, thinking disabled",
+			Effort:           ClaudeEffort{Level: "high"},
+			ExpectedLevel:    "high",
+			ExpectedThinking: false,
+		},
+		{
+			Case:             "Reasoning effort absent, thinking enabled",
+			ExpectedLevel:    "",
+			Thinking:         ClaudeThinking{Enabled: true},
+			ExpectedThinking: true,
+		},
+		{
+			Case:             "Reasoning effort absent, thinking disabled",
+			ExpectedLevel:    "",
+			ExpectedThinking: false,
+		},
+	}
+
+	for _, tc := range cases {
+		cache.Set(cache.Session, cache.CLAUDECACHE, ClaudeData{
+			Effort:   tc.Effort,
+			Thinking: tc.Thinking,
+		}, cache.INFINITE)
+
+		env := new(mock.Environment)
+		claude := &Claude{
+			Base: Base{
+				env:     env,
+				options: options.Map{},
+			},
+		}
+
+		assert.True(t, claude.Enabled(), tc.Case)
+		assert.Equal(t, tc.ExpectedLevel, claude.Effort.Level, tc.Case)
+		assert.Equal(t, tc.ExpectedThinking, claude.Thinking.Enabled, tc.Case)
+	}
+}
+
+func TestClaudeEffortAndThinkingJSONShape(t *testing.T) {
+	cases := []struct {
+		Case             string
+		JSON             string
+		ExpectedLevel    string
+		ExpectedThinking bool
+	}{
+		{
+			Case:             "Both fields present",
+			JSON:             `{"effort":{"level":"xhigh"},"thinking":{"enabled":true}}`,
+			ExpectedLevel:    "xhigh",
+			ExpectedThinking: true,
+		},
+		{
+			Case:             "Both fields absent",
+			JSON:             `{}`,
+			ExpectedLevel:    "",
+			ExpectedThinking: false,
+		},
+		{
+			Case:             "Effort object empty, thinking disabled",
+			JSON:             `{"effort":{},"thinking":{"enabled":false}}`,
+			ExpectedLevel:    "",
+			ExpectedThinking: false,
+		},
+	}
+
+	for _, tc := range cases {
+		var data ClaudeData
+		err := json.Unmarshal([]byte(tc.JSON), &data)
+		assert.NoError(t, err, tc.Case)
+		assert.Equal(t, tc.ExpectedLevel, data.Effort.Level, tc.Case)
+		assert.Equal(t, tc.ExpectedThinking, data.Thinking.Enabled, tc.Case)
+	}
+}
+
+func TestClaudeAdditionalStatusLineFieldsJSONShape(t *testing.T) {
+	const (
+		defaultOutputStyleName = "default"
+		originalBranchName     = "main"
+	)
+
+	cases := []struct {
+		Case                 string
+		JSON                 string
+		Expected             ClaudeData
+		ExpectedAddedDirsNil bool
+	}{
+		{
+			Case: "All fields present",
+			JSON: `{
+				"cwd": "/repo/project",
+				"session_name": "release-check",
+				"transcript_path": "/repo/project/.claude/transcript.jsonl",
+				"version": "2.1.123",
+				"output_style": {
+					"name": "default"
+				},
+				"workspace": {
+					"added_dirs": ["/repo/shared", "/repo/docs"]
+				},
+				"exceeds_200k_tokens": true,
+				"vim": {
+					"mode": "NORMAL"
+				},
+				"agent": {
+					"name": "security-reviewer"
+				},
+				"worktree": {
+					"name": "my-feature",
+					"path": "/repo/project/.claude/worktrees/my-feature",
+					"branch": "worktree-my-feature",
+					"original_cwd": "/repo/project",
+					"original_branch": "main"
+				},
+				"fast_mode": true
+			}`,
+			Expected: ClaudeData{
+				CWD:               "/repo/project",
+				SessionName:       "release-check",
+				TranscriptPath:    "/repo/project/.claude/transcript.jsonl",
+				Version:           "2.1.123",
+				OutputStyle:       ClaudeOutputStyle{Name: defaultOutputStyleName},
+				Workspace:         ClaudeWorkspace{AddedDirs: []string{"/repo/shared", "/repo/docs"}},
+				Exceeds200KTokens: true,
+				Vim:               ClaudeVim{Mode: "NORMAL"},
+				Agent:             ClaudeAgent{Name: "security-reviewer"},
+				Worktree: ClaudeWorktree{
+					Name:           "my-feature",
+					Path:           "/repo/project/.claude/worktrees/my-feature",
+					Branch:         "worktree-my-feature",
+					OriginalCWD:    "/repo/project",
+					OriginalBranch: originalBranchName,
+				},
+				FastMode: true,
+			},
+		},
+		{
+			Case:                 "All fields absent",
+			JSON:                 `{}`,
+			Expected:             ClaudeData{},
+			ExpectedAddedDirsNil: true,
+		},
+		{
+			Case: "Nested objects empty",
+			JSON: `{
+				"output_style": {},
+				"workspace": {},
+				"vim": {},
+				"agent": {},
+				"worktree": {}
+			}`,
+			Expected:             ClaudeData{},
+			ExpectedAddedDirsNil: true,
+		},
+		{
+			Case: "Partial nested fields",
+			JSON: `{
+				"workspace": {
+					"added_dirs": ["/repo/shared"]
+				},
+				"worktree": {
+					"name": "review",
+					"path": "/repo/project/.claude/worktrees/review"
+				}
+			}`,
+			Expected: ClaudeData{
+				Workspace: ClaudeWorkspace{AddedDirs: []string{"/repo/shared"}},
+				Worktree: ClaudeWorktree{
+					Name: "review",
+					Path: "/repo/project/.claude/worktrees/review",
+				},
+			},
+		},
+		{
+			Case: "Added dirs explicitly empty",
+			JSON: `{
+				"workspace": {
+					"added_dirs": []
+				}
+			}`,
+			Expected: ClaudeData{
+				Workspace: ClaudeWorkspace{AddedDirs: []string{}},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		// Act
+		var data ClaudeData
+		err := json.Unmarshal([]byte(tc.JSON), &data)
+
+		// Assert
+		assert.NoError(t, err, tc.Case)
+		assert.Equal(t, tc.Expected.CWD, data.CWD, tc.Case)
+		assert.Equal(t, tc.Expected.SessionName, data.SessionName, tc.Case)
+		assert.Equal(t, tc.Expected.TranscriptPath, data.TranscriptPath, tc.Case)
+		assert.Equal(t, tc.Expected.Version, data.Version, tc.Case)
+		assert.Equal(t, tc.Expected.OutputStyle.Name, data.OutputStyle.Name, tc.Case)
+		if tc.ExpectedAddedDirsNil {
+			assert.Nil(t, data.Workspace.AddedDirs, tc.Case)
+		} else {
+			assert.Equal(t, tc.Expected.Workspace.AddedDirs, data.Workspace.AddedDirs, tc.Case)
+		}
+		assert.Equal(t, tc.Expected.Exceeds200KTokens, data.Exceeds200KTokens, tc.Case)
+		assert.Equal(t, tc.Expected.Vim.Mode, data.Vim.Mode, tc.Case)
+		assert.Equal(t, tc.Expected.Agent.Name, data.Agent.Name, tc.Case)
+		assert.Equal(t, tc.Expected.Worktree.Name, data.Worktree.Name, tc.Case)
+		assert.Equal(t, tc.Expected.Worktree.Path, data.Worktree.Path, tc.Case)
+		assert.Equal(t, tc.Expected.Worktree.Branch, data.Worktree.Branch, tc.Case)
+		assert.Equal(t, tc.Expected.Worktree.OriginalCWD, data.Worktree.OriginalCWD, tc.Case)
+		assert.Equal(t, tc.Expected.Worktree.OriginalBranch, data.Worktree.OriginalBranch, tc.Case)
+		assert.Equal(t, tc.Expected.FastMode, data.FastMode, tc.Case)
 	}
 }
 
@@ -539,5 +775,233 @@ func TestClaudeRateLimitUsage(t *testing.T) {
 
 		assert.Equal(t, tc.ExpectedFive, claude.FiveHourUsage(), tc.Case+" (FiveHour)")
 		assert.Equal(t, tc.ExpectedSeven, claude.SevenDayUsage(), tc.Case+" (SevenDay)")
+	}
+}
+
+func TestClaudeGaugeMethods(t *testing.T) {
+	cases := []struct {
+		RateLimits             *ClaudeRateLimits
+		Case                   string
+		MarkedChar             string
+		UnmarkedChar           string
+		ExpectedTokenGauge     string
+		ExpectedTokenGaugeUsed string
+		ExpectedFiveHourGauge  string
+		ExpectedSevenDayGauge  string
+		UsedPercentage         int
+	}{
+		{
+			Case:                   "Default chars (▰▱) at 40% used",
+			MarkedChar:             "▰",
+			UnmarkedChar:           "▱",
+			UsedPercentage:         40,
+			ExpectedTokenGauge:     "▰▰▰▱▱", // 60% remaining = 3 blocks
+			ExpectedTokenGaugeUsed: "▰▰▱▱▱", // 40% used = 2 blocks
+		},
+		{
+			Case:                   "Custom chars (█░) at 40% used",
+			MarkedChar:             "█",
+			UnmarkedChar:           "░",
+			UsedPercentage:         40,
+			ExpectedTokenGauge:     "███░░", // 60% remaining = 3 blocks
+			ExpectedTokenGaugeUsed: "██░░░", // 40% used = 2 blocks
+		},
+		{
+			Case:           "Custom chars with rate limits",
+			MarkedChar:     "█",
+			UnmarkedChar:   "░",
+			UsedPercentage: 0,
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{UsedPercentage: new(60.0)},
+				SevenDay: &ClaudeRateLimitWindow{UsedPercentage: new(20.0)},
+			},
+			ExpectedFiveHourGauge: "███░░", // 60% used = 3 blocks
+			ExpectedSevenDayGauge: "█░░░░", // 20% used = 1 block
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			usedPct := tc.UsedPercentage
+			claude := &Claude{
+				markedChar:   tc.MarkedChar,
+				unmarkedChar: tc.UnmarkedChar,
+			}
+			claude.ContextWindow.UsedPercentage = &usedPct
+			claude.RateLimits = tc.RateLimits
+
+			if tc.ExpectedTokenGauge != "" {
+				assert.Equal(t, tc.ExpectedTokenGauge, claude.TokenGauge(), tc.Case+" (TokenGauge)")
+			}
+
+			if tc.ExpectedTokenGaugeUsed != "" {
+				assert.Equal(t, tc.ExpectedTokenGaugeUsed, claude.TokenGaugeUsed(), tc.Case+" (TokenGaugeUsed)")
+			}
+
+			if tc.ExpectedFiveHourGauge != "" {
+				assert.Equal(t, tc.ExpectedFiveHourGauge, claude.FiveHourGauge(), tc.Case+" (FiveHourGauge)")
+			}
+
+			if tc.ExpectedSevenDayGauge != "" {
+				assert.Equal(t, tc.ExpectedSevenDayGauge, claude.SevenDayGauge(), tc.Case+" (SevenDayGauge)")
+			}
+		})
+	}
+}
+
+func TestClaudeGaugeOptionsReadInEnabled(t *testing.T) {
+	t.Cleanup(func() {
+		cache.Delete(cache.Session, cache.CLAUDECACHE)
+	})
+
+	cache.Set(cache.Session, cache.CLAUDECACHE, ClaudeData{
+		Model: ClaudeModel{DisplayName: "Opus"},
+	}, cache.INFINITE)
+
+	env := new(mock.Environment)
+	claude := &Claude{
+		Base: Base{
+			env: env,
+			options: options.Map{
+				gaugeMarkedChar:   "█",
+				gaugeUnmarkedChar: "░",
+			},
+		},
+	}
+
+	assert.True(t, claude.Enabled())
+	assert.Equal(t, "█", claude.markedChar)
+	assert.Equal(t, "░", claude.unmarkedChar)
+}
+
+func TestClaudeRateLimitResetsAt(t *testing.T) {
+	fiveHourTS := int64(1711180800) // 2024-03-23 08:00:00 UTC
+	sevenDayTS := int64(1711612800) // 2024-03-28 08:00:00 UTC
+
+	cases := []struct {
+		ExpectedFiveHour libtime.Time
+		ExpectedSevenDay libtime.Time
+		RateLimits       *ClaudeRateLimits
+		Case             string
+	}{
+		{
+			Case:             "Nil RateLimits",
+			RateLimits:       nil,
+			ExpectedFiveHour: libtime.Time{},
+			ExpectedSevenDay: libtime.Time{},
+		},
+		{
+			Case: "Nil FiveHour window",
+			RateLimits: &ClaudeRateLimits{
+				SevenDay: &ClaudeRateLimitWindow{ResetsAt: &sevenDayTS},
+			},
+			ExpectedFiveHour: libtime.Time{},
+			ExpectedSevenDay: libtime.Unix(sevenDayTS, 0),
+		},
+		{
+			Case: "Nil SevenDay window",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{ResetsAt: &fiveHourTS},
+			},
+			ExpectedFiveHour: libtime.Unix(fiveHourTS, 0),
+			ExpectedSevenDay: libtime.Time{},
+		},
+		{
+			Case: "Nil ResetsAt pointers",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{ResetsAt: nil},
+				SevenDay: &ClaudeRateLimitWindow{ResetsAt: nil},
+			},
+			ExpectedFiveHour: libtime.Time{},
+			ExpectedSevenDay: libtime.Time{},
+		},
+		{
+			Case: "Valid timestamps for both windows",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{ResetsAt: &fiveHourTS},
+				SevenDay: &ClaudeRateLimitWindow{ResetsAt: &sevenDayTS},
+			},
+			ExpectedFiveHour: libtime.Unix(fiveHourTS, 0),
+			ExpectedSevenDay: libtime.Unix(sevenDayTS, 0),
+		},
+	}
+
+	for _, tc := range cases {
+		claude := &Claude{}
+		claude.RateLimits = tc.RateLimits
+
+		assert.Equal(t, tc.ExpectedFiveHour, claude.FiveHourResetsAt(), tc.Case+" (FiveHour)")
+		assert.Equal(t, tc.ExpectedSevenDay, claude.SevenDayResetsAt(), tc.Case+" (SevenDay)")
+	}
+}
+
+func TestClaudeRateLimitResetsIn(t *testing.T) {
+	pastTS := libtime.Now().Add(-libtime.Hour).Unix()
+	futureTS := libtime.Now().Add(24 * libtime.Hour).Unix()
+
+	cases := []struct {
+		RateLimits   *ClaudeRateLimits
+		Case         string
+		FiveHourSign int // -1=negative, 0=zero, 1=positive
+		SevenDaySign int
+	}{
+		{
+			Case:         "Nil RateLimits",
+			RateLimits:   nil,
+			FiveHourSign: 0,
+			SevenDaySign: 0,
+		},
+		{
+			Case:         "Nil windows",
+			RateLimits:   &ClaudeRateLimits{},
+			FiveHourSign: 0,
+			SevenDaySign: 0,
+		},
+		{
+			Case: "Nil ResetsAt",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{},
+				SevenDay: &ClaudeRateLimitWindow{},
+			},
+			FiveHourSign: 0,
+			SevenDaySign: 0,
+		},
+		{
+			Case: "Past timestamp",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{ResetsAt: &pastTS},
+				SevenDay: &ClaudeRateLimitWindow{ResetsAt: &pastTS},
+			},
+			FiveHourSign: -1,
+			SevenDaySign: -1,
+		},
+		{
+			Case: "Future timestamp",
+			RateLimits: &ClaudeRateLimits{
+				FiveHour: &ClaudeRateLimitWindow{ResetsAt: &futureTS},
+				SevenDay: &ClaudeRateLimitWindow{ResetsAt: &futureTS},
+			},
+			FiveHourSign: 1,
+			SevenDaySign: 1,
+		},
+	}
+
+	assertSign := func(t *testing.T, d libtime.Duration, sign int, name string) {
+		t.Helper()
+		switch sign {
+		case 0:
+			assert.Equal(t, libtime.Duration(0), d, name)
+		case 1:
+			assert.Positive(t, d, name)
+		case -1:
+			assert.Negative(t, d, name)
+		}
+	}
+
+	for _, tc := range cases {
+		claude := &Claude{}
+		claude.RateLimits = tc.RateLimits
+		assertSign(t, claude.FiveHourResetsIn(), tc.FiveHourSign, tc.Case+" (FiveHour)")
+		assertSign(t, claude.SevenDayResetsIn(), tc.SevenDaySign, tc.Case+" (SevenDay)")
 	}
 }

@@ -2,26 +2,42 @@ package segments
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
 
 // Claude segment displays Claude Code session information
 type Claude struct {
 	Base
+	markedChar   string
+	unmarkedChar string
 	ClaudeData
 }
 
 // ClaudeData represents the parsed Claude JSON data
 type ClaudeData struct {
-	RateLimits    *ClaudeRateLimits   `json:"rate_limits"`
-	Model         ClaudeModel         `json:"model"`
-	Workspace     ClaudeWorkspace     `json:"workspace"`
-	SessionID     string              `json:"session_id"`
-	ContextWindow ClaudeContextWindow `json:"context_window"`
-	Cost          ClaudeCost          `json:"cost"`
+	RateLimits        *ClaudeRateLimits   `json:"rate_limits"`
+	Worktree          ClaudeWorktree      `json:"worktree"`
+	Model             ClaudeModel         `json:"model"`
+	OutputStyle       ClaudeOutputStyle   `json:"output_style"`
+	Vim               ClaudeVim           `json:"vim"`
+	TranscriptPath    string              `json:"transcript_path"`
+	CWD               string              `json:"cwd"`
+	Version           string              `json:"version"`
+	SessionID         string              `json:"session_id"`
+	Effort            ClaudeEffort        `json:"effort"`
+	SessionName       string              `json:"session_name"`
+	Agent             ClaudeAgent         `json:"agent"`
+	Workspace         ClaudeWorkspace     `json:"workspace"`
+	ContextWindow     ClaudeContextWindow `json:"context_window"`
+	Cost              ClaudeCost          `json:"cost"`
+	Exceeds200KTokens bool                `json:"exceeds_200k_tokens"`
+	Thinking          ClaudeThinking      `json:"thinking"`
+	FastMode          bool                `json:"fast_mode"`
 }
 
 // ClaudeModel represents the AI model information
@@ -32,9 +48,45 @@ type ClaudeModel struct {
 
 // ClaudeWorkspace represents workspace directory information
 type ClaudeWorkspace struct {
-	CurrentDir  string `json:"current_dir"`
-	ProjectDir  string `json:"project_dir"`
-	GitWorktree string `json:"git_worktree"`
+	CurrentDir  string   `json:"current_dir"`
+	ProjectDir  string   `json:"project_dir"`
+	GitWorktree string   `json:"git_worktree"`
+	AddedDirs   []string `json:"added_dirs"`
+}
+
+// ClaudeOutputStyle represents the current output style.
+type ClaudeOutputStyle struct {
+	Name string `json:"name"`
+}
+
+// ClaudeEffort represents reasoning effort information for the current session.
+// Level is empty when the active model does not support reasoning effort.
+type ClaudeEffort struct {
+	Level string `json:"level"`
+}
+
+// ClaudeThinking represents extended thinking state for the current session.
+type ClaudeThinking struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ClaudeVim represents vim mode state.
+type ClaudeVim struct {
+	Mode string `json:"mode"`
+}
+
+// ClaudeAgent represents the active agent.
+type ClaudeAgent struct {
+	Name string `json:"name"`
+}
+
+// ClaudeWorktree represents Claude Code --worktree session information.
+type ClaudeWorktree struct {
+	Name           string `json:"name"`
+	Path           string `json:"path"`
+	Branch         string `json:"branch"`
+	OriginalCWD    string `json:"original_cwd"`
+	OriginalBranch string `json:"original_branch"`
 }
 
 // DurationMS is a duration in milliseconds that formats as "Xm Ys".
@@ -89,10 +141,13 @@ type ClaudeCurrentUsage struct {
 const (
 	thousand = 1000.0
 	million  = 1000000.0
+
+	gaugeMarkedChar   options.Option = "gauge_marked_char"
+	gaugeUnmarkedChar options.Option = "gauge_unmarked_char"
 )
 
 func (c *Claude) Template() string {
-	return " \U000f0bc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenUsagePercent.Gauge }} "
+	return " \U000f0bc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }} "
 }
 
 func (c *Claude) Enabled() bool {
@@ -110,6 +165,9 @@ func (c *Claude) Enabled() bool {
 
 	// Copy the data to our embedded struct
 	c.ClaudeData = claudeData
+
+	c.markedChar = c.options.String(gaugeMarkedChar, "▰")
+	c.unmarkedChar = c.options.String(gaugeUnmarkedChar, "▱")
 
 	return true
 }
@@ -162,6 +220,26 @@ func (c *Claude) TokenUsagePercent() text.Percentage {
 	return text.Percentage(roundedPercent)
 }
 
+// TokenGauge returns a 5-block gauge showing remaining context window capacity using the configured characters.
+func (c *Claude) TokenGauge() string {
+	return c.TokenUsagePercent().GaugeWith(c.markedChar, c.unmarkedChar)
+}
+
+// TokenGaugeUsed returns a 5-block gauge showing used context window capacity using the configured characters.
+func (c *Claude) TokenGaugeUsed() string {
+	return c.TokenUsagePercent().GaugeUsedWith(c.markedChar, c.unmarkedChar)
+}
+
+// FiveHourGauge returns a 5-block gauge showing 5-hour rate limit usage using the configured characters.
+func (c *Claude) FiveHourGauge() string {
+	return c.FiveHourUsage().GaugeUsedWith(c.markedChar, c.unmarkedChar)
+}
+
+// SevenDayGauge returns a 5-block gauge showing 7-day rate limit usage using the configured characters.
+func (c *Claude) SevenDayGauge() string {
+	return c.SevenDayUsage().GaugeUsedWith(c.markedChar, c.unmarkedChar)
+}
+
 // FormattedCost returns the cost formatted as a currency string
 func (c *Claude) FormattedCost() string {
 	if c.Cost.TotalCostUSD < 0.01 {
@@ -210,6 +288,61 @@ func (c *Claude) FiveHourUsage() text.Percentage {
 // SevenDayUsage returns the 7-day window rate limit usage as a Percentage.
 func (c *Claude) SevenDayUsage() text.Percentage {
 	return rateLimitPercentage(c.RateLimits, func(r *ClaudeRateLimits) *ClaudeRateLimitWindow {
+		return r.SevenDay
+	})
+}
+
+// rateLimitResetsAt extracts the reset time from a rate limit window with nil-safety.
+func rateLimitResetsAt(limits *ClaudeRateLimits, window func(*ClaudeRateLimits) *ClaudeRateLimitWindow) time.Time {
+	if limits == nil || window == nil {
+		return time.Time{}
+	}
+
+	w := window(limits)
+	if w == nil || w.ResetsAt == nil {
+		return time.Time{}
+	}
+
+	return time.Unix(*w.ResetsAt, 0)
+}
+
+// FiveHourResetsAt returns the reset time for the 5-hour rolling window, or zero if unavailable.
+func (c *Claude) FiveHourResetsAt() time.Time {
+	return rateLimitResetsAt(c.RateLimits, func(r *ClaudeRateLimits) *ClaudeRateLimitWindow {
+		return r.FiveHour
+	})
+}
+
+// SevenDayResetsAt returns the reset time for the 7-day rolling window, or zero if unavailable.
+func (c *Claude) SevenDayResetsAt() time.Time {
+	return rateLimitResetsAt(c.RateLimits, func(r *ClaudeRateLimits) *ClaudeRateLimitWindow {
+		return r.SevenDay
+	})
+}
+
+// rateLimitResetsIn returns the signed duration until a rate limit window resets.
+// Returns 0 when data is unavailable, a negative value when the window already reset, and a positive value otherwise.
+func rateLimitResetsIn(limits *ClaudeRateLimits, window func(*ClaudeRateLimits) *ClaudeRateLimitWindow) time.Duration {
+	t := rateLimitResetsAt(limits, window)
+	if t.IsZero() {
+		return 0
+	}
+
+	return time.Until(t)
+}
+
+// FiveHourResetsIn returns the signed duration until the 5-hour rolling window resets.
+// Returns 0 when unavailable, negative when the window already reset.
+func (c *Claude) FiveHourResetsIn() time.Duration {
+	return rateLimitResetsIn(c.RateLimits, func(r *ClaudeRateLimits) *ClaudeRateLimitWindow {
+		return r.FiveHour
+	})
+}
+
+// SevenDayResetsIn returns the signed duration until the 7-day rolling window resets.
+// Returns 0 when unavailable, negative when the window already reset.
+func (c *Claude) SevenDayResetsIn() time.Duration {
+	return rateLimitResetsIn(c.RateLimits, func(r *ClaudeRateLimits) *ClaudeRateLimitWindow {
 		return r.SevenDay
 	})
 }

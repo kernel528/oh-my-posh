@@ -25,7 +25,7 @@ import Config from "@site/src/components/Config.js";
     foreground: "#FFFFFF",
     background: "#FF6B35",
     template:
-      " \udb82\udfc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenUsagePercent.Gauge }} ",
+      " \udb82\udfc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }} ",
   }}
 />
 
@@ -34,27 +34,54 @@ import Config from "@site/src/components/Config.js";
 :::note default template
 
 ```template
- \udb82\udfc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenUsagePercent.Gauge }}
+ \udb82\udfc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }}
 ```
 
 :::
 
+## Options
+
+| Name                  | Type     | Default | Description                                              |
+| --------------------- | -------- | ------- | -------------------------------------------------------- |
+| `gauge_marked_char`   | `string` | `▰`     | Character used for filled blocks in gauge visualizations |
+| `gauge_unmarked_char` | `string` | `▱`     | Character used for empty blocks in gauge visualizations  |
+
 ### Properties
 
-| Name                 | Type            | Description                                        |
-| -------------------- | --------------- | -------------------------------------------------- |
-| `.SessionID`         | `string`        | Unique identifier for the Claude session           |
-| `.Model`             | `Model`         | AI model information                               |
-| `.Workspace`         | `Workspace`     | Workspace directory information                    |
-| `.Cost`              | `Cost`          | Cost and duration information                      |
-| `.ContextWindow`     | `ContextWindow` | Token usage information                            |
-| `.TokenUsagePercent` | `Percentage`    | Percentage of context window used (0-100)          |
-| `.FormattedCost`     | `string`        | Formatted cost string (e.g., "$0.15" or "$0.0012") |
-| `.FormattedTokens`   | `string`        | Human-readable token count (e.g., "1.2K", "15.3M") |
-| `.FormattedDuration`    | `string`        | Total session duration (e.g., "2m 5s")             |
-| `.FormattedAPIDuration` | `string`        | API wait time (e.g., "0m 45s")                     |
-| `.FiveHourUsage`        | `Percentage`    | 5-hour rolling rate limit usage (0-100)            |
-| `.SevenDayUsage`        | `Percentage`    | 7-day rate limit usage (0-100)                     |
+| Name                    | Type            | Description                                                                          |
+| ----------------------- | --------------- | ------------------------------------------------------------------------------------ |
+| `.CWD`                  | `string`        | Current working directory; same value as `.Workspace.CurrentDir`                     |
+| `.SessionID`            | `string`        | Unique identifier for the Claude session                                             |
+| `.SessionName`          | `string`        | Custom session name; empty when absent                                               |
+| `.TranscriptPath`       | `string`        | Path to the conversation transcript file                                             |
+| `.Model`                | `Model`         | AI model information                                                                 |
+| `.Workspace`            | `Workspace`     | Workspace directory information                                                      |
+| `.Version`              | `string`        | Claude Code version                                                                  |
+| `.OutputStyle`          | `OutputStyle`   | Current output style information                                                     |
+| `.Effort`               | `Effort`        | Reasoning effort information                                                         |
+| `.Thinking`             | `Thinking`      | Extended thinking state                                                              |
+| `.Cost`                 | `Cost`          | Cost and duration information                                                        |
+| `.ContextWindow`        | `ContextWindow` | Token usage information                                                              |
+| `.Exceeds200KTokens`    | `bool`          | Whether the most recent API response exceeded 200K total tokens                      |
+| `.Vim`                  | `Vim`           | Vim mode information; empty when absent                                              |
+| `.Agent`                | `Agent`         | Agent information; empty when absent                                                 |
+| `.Worktree`             | `Worktree`      | Claude Code worktree information; empty when absent                                  |
+| `.FastMode`             | `bool`          | Whether fast mode is enabled; `false` when absent or unsupported                     |
+| `.TokenUsagePercent`    | `Percentage`    | Percentage of context window used (0-100)                                            |
+| `.TokenGauge`           | `string`        | Gauge showing remaining context capacity using configured characters (e.g., `▰▰▰▱▱`) |
+| `.TokenGaugeUsed`       | `string`        | Gauge showing used context capacity using configured characters (e.g., `▰▰▱▱▱`)      |
+| `.FiveHourGauge`        | `string`        | Gauge showing 5-hour rate limit usage using configured characters                    |
+| `.SevenDayGauge`        | `string`        | Gauge showing 7-day rate limit usage using configured characters                     |
+| `.FiveHourResetsAt`     | `time.Time`     | 5-hour rate limit window reset time                                                  |
+| `.SevenDayResetsAt`     | `time.Time`     | 7-day rate limit window reset time                                                   |
+| `.FiveHourResetsIn`     | `time.Duration` | time until 5-hour resets; 0=unavailable, neg=past                                    |
+| `.SevenDayResetsIn`     | `time.Duration` | time until 7-day resets; 0=unavailable, neg=past                                     |
+| `.FormattedCost`        | `string`        | Formatted cost string (e.g., "$0.15" or "$0.0012")                                   |
+| `.FormattedTokens`      | `string`        | Human-readable token count (e.g., "1.2K", "15.3M")                                   |
+| `.FormattedDuration`    | `string`        | Total session duration (e.g., "2m 5s")                                               |
+| `.FormattedAPIDuration` | `string`        | API wait time (e.g., "0m 45s")                                                       |
+| `.FiveHourUsage`        | `Percentage`    | 5-hour rolling rate limit usage (0-100)                                              |
+| `.SevenDayUsage`        | `Percentage`    | 7-day rate limit usage (0-100)                                                       |
 
 #### Model Properties
 
@@ -65,21 +92,62 @@ import Config from "@site/src/components/Config.js";
 
 #### Workspace Properties
 
-| Name           | Type     | Description                                                                  |
-| -------------- | -------- | ---------------------------------------------------------------------------- |
-| `.CurrentDir`  | `string` | Current working directory                                                    |
-| `.ProjectDir`  | `string` | Root project directory                                                       |
-| `.GitWorktree` | `string` | Path to the linked git worktree, empty when not inside a linked git worktree |
+| Name           | Type       | Description                                                                  |
+| -------------- | ---------- | ---------------------------------------------------------------------------- |
+| `.CurrentDir`  | `string`   | Current working directory; same value as `.CWD`                              |
+| `.ProjectDir`  | `string`   | Directory where Claude Code was launched; may differ from `.CurrentDir`      |
+| `.AddedDirs`   | `[]string` | Additional directories added via `/add-dir` or `--add-dir`                   |
+| `.GitWorktree` | `string`   | Path to the linked git worktree, empty when not inside a linked git worktree |
+
+#### OutputStyle Properties
+
+| Name    | Type     | Description                      |
+| ------- | -------- | -------------------------------- |
+| `.Name` | `string` | Name of the current output style |
+
+#### Effort Properties
+
+| Name     | Type     | Description                                                                                        |
+| -------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `.Level` | `string` | Reasoning effort level (`low`, `medium`, `high`, `xhigh`, `max`); empty when absent or unsupported |
+
+#### Thinking Properties
+
+| Name       | Type   | Description                                               |
+| ---------- | ------ | --------------------------------------------------------- |
+| `.Enabled` | `bool` | Whether extended thinking is enabled; `false` when absent |
+
+#### Vim Properties
+
+| Name    | Type     | Description                                       |
+| ------- | -------- | ------------------------------------------------- |
+| `.Mode` | `string` | Current vim mode; empty when vim mode is disabled |
+
+#### Agent Properties
+
+| Name    | Type     | Description                               |
+| ------- | -------- | ----------------------------------------- |
+| `.Name` | `string` | Agent name; empty when no agent is active |
+
+#### Worktree Properties
+
+| Name              | Type     | Description                                                    |
+| ----------------- | -------- | -------------------------------------------------------------- |
+| `.Name`           | `string` | Name of the active Claude Code worktree                        |
+| `.Path`           | `string` | Absolute path to the worktree directory                        |
+| `.Branch`         | `string` | Git branch name for the worktree; empty when absent            |
+| `.OriginalCWD`    | `string` | Directory Claude Code was in before entering worktree          |
+| `.OriginalBranch` | `string` | Branch checked out before entering worktree; empty when absent |
 
 #### Cost Properties
 
-| Name               | Type      | Description                            |
-| ------------------ | --------- | -------------------------------------- |
-| `.TotalCostUSD`       | `float64` | Total cost in USD                                 |
+| Name                  | Type         | Description                                                 |
+| --------------------- | ------------ | ----------------------------------------------------------- |
+| `.TotalCostUSD`       | `float64`    | Total cost in USD                                           |
 | `.TotalDurationMS`    | `DurationMS` | Total session duration in milliseconds (formats as "Xm Ys") |
 | `.TotalAPIDurationMS` | `DurationMS` | Time spent waiting for API responses (formats as "Xm Ys")   |
-| `.TotalLinesAdded`    | `int`     | Lines of code added in the session                |
-| `.TotalLinesRemoved`  | `int`     | Lines of code removed in the session              |
+| `.TotalLinesAdded`    | `int`        | Lines of code added in the session                          |
+| `.TotalLinesRemoved`  | `int`        | Lines of code removed in the session                        |
 
 #### ContextWindow Properties
 
@@ -115,13 +183,19 @@ Available when Claude Code provides rate limit data (Pro/Max subscribers). Acces
 
 ### Percentage Methods
 
-The `TokenUsagePercent` property is a `Percentage` type that provides additional functionality:
+The `Percentage` type (returned by `.TokenUsagePercent`, `.FiveHourUsage`, `.SevenDayUsage`)
+provides additional methods for direct use in templates:
 
 | Method       | Returns  | Description                                                        |
 | ------------ | -------- | ------------------------------------------------------------------ |
-| `.Gauge`     | `string` | Visual gauge showing remaining capacity using 5 bar blocks (▰▰▰▰▱) |
-| `.GaugeUsed` | `string` | Visual gauge showing used capacity using 5 bar blocks (▰▱▱▱▱)      |
+| `.Gauge`     | `string` | Visual gauge showing remaining capacity using hardcoded `▰`/`▱` characters |
+| `.GaugeUsed` | `string` | Visual gauge showing used capacity using hardcoded `▰`/`▱` characters |
 | `.String`    | `string` | Numeric percentage value (e.g., "75" for use in templates)         |
+
+:::tip Custom gauge characters
+Use `.TokenGauge`, `.TokenGaugeUsed`, `.FiveHourGauge`, and `.SevenDayGauge` instead of the
+raw `.Percentage` methods above — they respect the `gauge_marked_char` and `gauge_unmarked_char` options.
+:::
 
 ## How it works
 
