@@ -1,6 +1,7 @@
 package segments
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,67 +21,89 @@ type Claude struct {
 
 // ClaudeData represents the parsed Claude JSON data
 type ClaudeData struct {
+	Effort            *ClaudeEffort       `json:"effort"`
+	Worktree          *ClaudeWorktree     `json:"worktree"`
+	OutputStyle       *ClaudeOutputStyle  `json:"output_style"`
+	Vim               *ClaudeVim          `json:"vim"`
 	RateLimits        *ClaudeRateLimits   `json:"rate_limits"`
-	Worktree          ClaudeWorktree      `json:"worktree"`
-	Model             ClaudeModel         `json:"model"`
-	OutputStyle       ClaudeOutputStyle   `json:"output_style"`
-	Vim               ClaudeVim           `json:"vim"`
+	Thinking          *ClaudeThinking     `json:"thinking"`
+	PR                *ClaudePR           `json:"pr"`
+	Agent             *ClaudeAgent        `json:"agent"`
+	Model             AIModel             `json:"model"`
 	TranscriptPath    string              `json:"transcript_path"`
-	CWD               string              `json:"cwd"`
-	Version           string              `json:"version"`
-	SessionID         string              `json:"session_id"`
-	Effort            ClaudeEffort        `json:"effort"`
+	PromptID          string              `json:"prompt_id"`
 	SessionName       string              `json:"session_name"`
-	Agent             ClaudeAgent         `json:"agent"`
+	SessionID         string              `json:"session_id"`
+	Version           string              `json:"version"`
+	CWD               string              `json:"cwd"`
 	Workspace         ClaudeWorkspace     `json:"workspace"`
 	ContextWindow     ClaudeContextWindow `json:"context_window"`
 	Cost              ClaudeCost          `json:"cost"`
 	Exceeds200KTokens bool                `json:"exceeds_200k_tokens"`
-	Thinking          ClaudeThinking      `json:"thinking"`
 	FastMode          bool                `json:"fast_mode"`
 }
 
-// ClaudeModel represents the AI model information
-type ClaudeModel struct {
+// AIModel represents the AI model information shared across AI CLI segments.
+type AIModel struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 }
 
 // ClaudeWorkspace represents workspace directory information
 type ClaudeWorkspace struct {
-	CurrentDir  string   `json:"current_dir"`
-	ProjectDir  string   `json:"project_dir"`
-	GitWorktree string   `json:"git_worktree"`
-	AddedDirs   []string `json:"added_dirs"`
+	Repo        *ClaudeRepo `json:"repo"`
+	CurrentDir  string      `json:"current_dir"`
+	ProjectDir  string      `json:"project_dir"`
+	GitWorktree string      `json:"git_worktree"`
+	AddedDirs   []string    `json:"added_dirs"`
+}
+
+// ClaudeRepo represents the repository identity parsed from the origin remote.
+type ClaudeRepo struct {
+	Host  string `json:"host"`
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
 }
 
 // ClaudeOutputStyle represents the current output style.
+// Nil when the statusline payload does not report an output style.
 type ClaudeOutputStyle struct {
 	Name string `json:"name"`
 }
 
 // ClaudeEffort represents reasoning effort information for the current session.
-// Level is empty when the active model does not support reasoning effort.
+// Nil when the active model does not support reasoning effort.
 type ClaudeEffort struct {
 	Level string `json:"level"`
 }
 
 // ClaudeThinking represents extended thinking state for the current session.
+// Nil when the statusline payload does not report thinking state.
 type ClaudeThinking struct {
 	Enabled bool `json:"enabled"`
 }
 
 // ClaudeVim represents vim mode state.
+// Nil when vim mode is disabled.
 type ClaudeVim struct {
 	Mode string `json:"mode"`
 }
 
 // ClaudeAgent represents the active agent.
+// Nil when no agent is active.
 type ClaudeAgent struct {
 	Name string `json:"name"`
 }
 
+// ClaudePR represents the open pull request for the current branch.
+type ClaudePR struct {
+	Number      json.Number `json:"number"`
+	URL         string      `json:"url"`
+	ReviewState string      `json:"review_state"`
+}
+
 // ClaudeWorktree represents Claude Code --worktree session information.
+// Nil when the session is not running inside a Claude Code worktree.
 type ClaudeWorktree struct {
 	Name           string `json:"name"`
 	Path           string `json:"path"`
@@ -145,6 +168,19 @@ const (
 	gaugeMarkedChar   options.Option = "gauge_marked_char"
 	gaugeUnmarkedChar options.Option = "gauge_unmarked_char"
 )
+
+// formatTokenCount formats a token count as a human-readable string ("1.2K", "3.4M", or raw).
+func formatTokenCount(n int) string {
+	if n < int(thousand) {
+		return fmt.Sprintf("%d", n)
+	}
+
+	if n < int(million) {
+		return fmt.Sprintf("%.1fK", float64(n)/thousand)
+	}
+
+	return fmt.Sprintf("%.1fM", float64(n)/million)
+}
 
 func (c *Claude) Template() string {
 	return " \U000f0bc9 {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }} "
@@ -366,13 +402,5 @@ func (c *Claude) FormattedTokens() string {
 		currentTokens = c.ContextWindow.TotalInputTokens + c.ContextWindow.TotalOutputTokens
 	}
 
-	if currentTokens < int(thousand) {
-		return fmt.Sprintf("%d", currentTokens)
-	}
-
-	if currentTokens < int(million) {
-		return fmt.Sprintf("%.1fK", float64(currentTokens)/thousand)
-	}
-
-	return fmt.Sprintf("%.1fM", float64(currentTokens)/million)
+	return formatTokenCount(currentTokens)
 }

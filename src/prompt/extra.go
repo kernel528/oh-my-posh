@@ -44,7 +44,7 @@ func (e *Engine) ExtraPrompt(promptType ExtraPromptType) string {
 		if len(template) != 0 {
 			return template
 		}
-		switch promptType { //nolint: exhaustive
+		switch promptType {
 		case Debug:
 			return "[DBG]: "
 		case Transient:
@@ -61,7 +61,7 @@ func (e *Engine) ExtraPrompt(promptType ExtraPromptType) string {
 		promptText = err.Error()
 	}
 
-	if promptType == Transient && prompt.Newline {
+	if promptType == Transient && prompt.Newline && !e.cancelNewline() {
 		promptText = fmt.Sprintf("%s%s", e.getNewline(), promptText)
 	}
 

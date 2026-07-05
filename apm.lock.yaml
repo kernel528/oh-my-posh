@@ -1,7 +1,40 @@
 lockfile_version: '1'
-generated_at: '2026-04-12T20:00:53.202813+00:00'
-apm_version: 0.8.11
+generated_at: '2026-05-17T14:33:11.312146+00:00'
+apm_version: 0.12.3
 dependencies:
+- repo_url: JanDeDobbeleer/agentic
+  host: github.com
+  resolved_commit: 92d80e66873d98885281291a11c8acbcf30709f0
+  virtual_path: instructions/golang.instructions.md
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .github/instructions/golang.instructions.md
+  deployed_file_hashes:
+    .github/instructions/golang.instructions.md: sha256:89b03e000879a36a4b68f37136d1dcad039a908f242dd412f59a71e5c159cbb3
+  content_hash: sha256:94556f47cd95ee4c76dec6f7e53aad1948a1a51c6c85a810b320ecf3ebe075b4
+- repo_url: JanDeDobbeleer/agentic
+  host: github.com
+  resolved_commit: 92d80e66873d98885281291a11c8acbcf30709f0
+  virtual_path: instructions/markdown.instructions.md
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .github/instructions/markdown.instructions.md
+  deployed_file_hashes:
+    .github/instructions/markdown.instructions.md: sha256:e16f52f4e7f24c8b59caef5b423332690e5bf95d3f3cd37f86eb782b36e6ea82
+  content_hash: sha256:0f47d924eba5b69635958c5fe13194a39deb56fa1e9cab3f556f0d810ac283cd
+- repo_url: JanDeDobbeleer/agentic
+  host: github.com
+  resolved_commit: 92d80e66873d98885281291a11c8acbcf30709f0
+  virtual_path: instructions/powershell.instructions.md
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .github/instructions/powershell.instructions.md
+  deployed_file_hashes:
+    .github/instructions/powershell.instructions.md: sha256:8a6d0340bb63944ad6b318051a412a380275aa5750e2a9d0d50e2e78b3ecac3f
+  content_hash: sha256:0b75b2bb281c733a5beb1503104c164649d5d2dbc386a4aac3f784da6420c590
 - repo_url: JanDeDobbeleer/agentic
   host: github.com
   resolved_commit: b4e8062eaeef93582bf4cbb86ad4816f37630bb2
@@ -9,7 +42,7 @@ dependencies:
   is_virtual: true
   package_type: claude_skill
   deployed_files:
-  - .github/skills/conventional-commit
+  - .agents/skills/conventional-commit
   content_hash: sha256:d842107e497b6fd51f24e2bfe74dbaf3f9e0e358bf5f95b9d79abbec5785e7af
 - repo_url: JanDeDobbeleer/agentic
   host: github.com
@@ -18,7 +51,7 @@ dependencies:
   is_virtual: true
   package_type: claude_skill
   deployed_files:
-  - .github/skills/golang
+  - .agents/skills/golang
   content_hash: sha256:b0783cb13028c1b486aaffe7bce1b49294e92b22e1f8ce58895e61c639865f90
 - repo_url: JanDeDobbeleer/agentic
   host: github.com
@@ -27,7 +60,7 @@ dependencies:
   is_virtual: true
   package_type: claude_skill
   deployed_files:
-  - .github/skills/markdown
+  - .agents/skills/markdown
   content_hash: sha256:fa25f4f36faa33fa51ec6e9a3b5bf7cde618d8d7dfb572dd8f55733dc1813265
 - repo_url: JanDeDobbeleer/agentic
   host: github.com
@@ -36,7 +69,7 @@ dependencies:
   is_virtual: true
   package_type: claude_skill
   deployed_files:
-  - .github/skills/powershell
+  - .agents/skills/powershell
   content_hash: sha256:bc844acc1cf9ccc5d2d10e1c889b8b5b69b92f743e3bc11e0bc9a386770fc864
 - repo_url: JanDeDobbeleer/agentic
   host: github.com
@@ -45,5 +78,23 @@ dependencies:
   is_virtual: true
   package_type: claude_skill
   deployed_files:
-  - .github/skills/vale-user-facing-text
+  - .agents/skills/vale-user-facing-text
   content_hash: sha256:7676bf19dc93149f469655ffb0b166db7c953fe0483b8a96e763ce024b1c8a59
+- repo_url: ast-grep/agent-skill
+  host: github.com
+  resolved_commit: 577f4d4507678f2c8cee150fae25e6ce309f70b1
+  virtual_path: ast-grep/skills/ast-grep
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/ast-grep
+  content_hash: sha256:e812630c21ec2215bd0abfe33835ae382059112e990411b588b84bb24c4f0a4f
+- repo_url: github/awesome-copilot
+  host: github.com
+  resolved_commit: bb91d3606099fc047798a8b8c28d60989a531a01
+  virtual_path: skills/gh-cli
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/gh-cli
+  content_hash: sha256:cbe644b0c6760ae2a1eaafa39133920d889331327065d92a131675a665273e56

@@ -25,6 +25,10 @@ func (term *Terminal) QueryWindowTitles(_, _ string) (string, error) {
 	return "", &NotImplemented{}
 }
 
+func (term *Terminal) QueryMediaPlayer(_ string) (*MediaInfo, error) {
+	return nil, &NotImplemented{}
+}
+
 func (term *Terminal) IsWsl() bool {
 	defer log.Trace(time.Now())
 	const key = "is_wsl"
@@ -82,12 +86,6 @@ func (term *Terminal) TerminalWidth() (int, error) {
 	term.CmdFlags.TerminalWidth = int(width)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
 
-	// Claude CLI has a 2 character padding on both sides
-	if term.CmdFlags.Shell == "claude" {
-		log.Debug("adjusting terminal width for Claude CLI")
-		term.CmdFlags.TerminalWidth -= 4
-	}
-
 	return term.CmdFlags.TerminalWidth, err
 }
 
@@ -119,14 +117,20 @@ func (term *Terminal) Platform() string {
 func (term *Terminal) getSpecialLinuxDistros(platform string) string {
 	lsbInfo := term.FileContent("/etc/lsb-release")
 
-	if platform == "arch" && strings.Contains(strings.ToLower(lsbInfo), "manjaro") {
-		// validate for Manjaro
+	if platform == "debian" && strings.Contains(strings.ToLower(lsbInfo), "zorin") {
+		return "zorin"
+	}
+
+	if platform != "arch" {
+		return platform
+	}
+
+	if strings.Contains(strings.ToLower(lsbInfo), "manjaro") {
 		return "manjaro"
 	}
 
-	if platform == "debian" && strings.Contains(strings.ToLower(lsbInfo), "zorin") {
-		// validate for Zorin OS
-		return "zorin"
+	if strings.Contains(strings.ToLower(lsbInfo), "artix") {
+		return "artix"
 	}
 
 	return platform

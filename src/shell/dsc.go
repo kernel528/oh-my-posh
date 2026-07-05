@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/dsc"
@@ -27,8 +28,9 @@ func DSC() *dsc.Resource[*Shell] {
 }
 
 type Shell struct {
-	Command string `json:"command,omitempty" jsonschema:"title=Command,description=The oh-my-posh init command to run"`
-	Name    string `json:"name,omitempty" jsonschema:"title=Shell name,description=The name of the shell"`
+	Command          string `json:"command,omitempty" jsonschema:"title=Command,description=The oh-my-posh init command to run"`
+	Name             string `json:"name,omitempty" jsonschema:"title=Shell name,description=The name of the shell"`
+	SkipExistingInit bool   `json:"skipExistingInit,omitempty" jsonschema:"title=Skip existing init,description=Treat any existing oh-my-posh init line as compliant instead of rewriting it"` //nolint:lll
 }
 
 func (s *Shell) Equal(shell *Shell) bool {
@@ -148,6 +150,11 @@ func (s *Shell) updateShellConfig(content string) (string, bool) {
 	initLineStr := lines[initLinePos]
 	shellCommand := s.shellCommand()
 
+	if s.SkipExistingInit {
+		log.Debug("existing oh-my-posh init line found, skipping update")
+		return content, false
+	}
+
 	// validate if we have the same command
 	if strings.Contains(initLineStr, shellCommand) {
 		log.Debug("oh-my-posh already correctly configured")
@@ -174,8 +181,7 @@ func (s *Shell) addInitLine(content string) string {
 }
 
 func (s *Shell) getLastInitLinePosition(lines []string) int {
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := lines[i]
+	for i, line := range slices.Backward(lines) {
 		if regex.MatchString(initCommandRegex, line) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
 			return i
 		}

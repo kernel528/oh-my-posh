@@ -368,6 +368,7 @@
           "enum": [
             "angular",
             "argocd",
+            "aspire",
             "aurelia",
             "aws",
             "az",
@@ -386,6 +387,7 @@
             "clojure",
             "cmake",
             "copilot",
+            "copilot_cli",
             "connection",
             "crystal",
             "dart",
@@ -402,6 +404,7 @@
             "git",
             "gitversion",
             "go",
+            "gradle",
             "haskell",
             "helm",
             "http",
@@ -466,6 +469,7 @@
             "upgrade",
             "v",
             "vala",
+            "vimode",
             "wakatime",
             "winget",
             "winreg",
@@ -473,7 +477,8 @@
             "xmake",
             "yarn",
             "ytm",
-            "zig"
+            "zig",
+            "zvm"
           ]
         },
         "style": {
@@ -659,6 +664,32 @@
           "if": {
             "properties": {
               "type": {
+                "const": "aspire"
+              }
+            }
+          },
+          "then": {
+            "title": "Aspire Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/aspire",
+            "properties": {
+              "options": {
+                "properties": {
+                  "fetch_running": {
+                    "type": "boolean",
+                    "title": "Fetch Running",
+                    "description": "Query aspire ps to determine whether the resolved AppHost is running",
+                    "default": true
+                  }
+                },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "aurelia"
               }
             }
@@ -708,6 +739,12 @@
                     "title": "Display Default User Profile",
                     "description": "Display the segment when default user or not",
                     "default": true
+                  },
+                  "display_access_key_id": {
+                    "type": "boolean",
+                    "title": "Display Access Key ID",
+                    "description": "Populate .AccessKeyID from AWS_ACCESS_KEY_ID, the AWS credentials file, or the AWS config file",
+                    "default": false
                   }
                 },
                 "unevaluatedProperties": false
@@ -1315,6 +1352,20 @@
             "description": "https://ohmyposh.dev/docs/segments/cli/claude",
             "properties": {
               "options": {
+                "properties": {
+                  "gauge_marked_char": {
+                    "type": "string",
+                    "title": "Gauge marked character",
+                    "description": "The character used for the filled part of the token usage gauge",
+                    "default": "▰"
+                  },
+                  "gauge_unmarked_char": {
+                    "type": "string",
+                    "title": "Gauge unmarked character",
+                    "description": "The character used for the empty part of the token usage gauge",
+                    "default": "▱"
+                  }
+                },
                 "unevaluatedProperties": false
               }
             }
@@ -1336,6 +1387,38 @@
                 "properties": {
                   "http_timeout": {
                     "$ref": "#/definitions/http_timeout"
+                  }
+                },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "copilot_cli"
+              }
+            }
+          },
+          "then": {
+            "title": "Copilot CLI Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/copilot-cli",
+            "properties": {
+              "options": {
+                "properties": {
+                  "gauge_marked_char": {
+                    "type": "string",
+                    "title": "Gauge marked character",
+                    "description": "The character used for the filled part of the token usage gauge",
+                    "default": "▰"
+                  },
+                  "gauge_unmarked_char": {
+                    "type": "string",
+                    "title": "Gauge unmarked character",
+                    "description": "The character used for the empty part of the token usage gauge",
+                    "default": "▱"
                   }
                 },
                 "unevaluatedProperties": false
@@ -1532,7 +1615,8 @@
                     "$ref": "#/definitions/display_mode",
                     "enum": [
                       "files",
-                      "context"
+                      "context",
+                      "environment"
                     ]
                   },
                   "extensions": {
@@ -1549,6 +1633,18 @@
                     "title": "Fetch Context",
                     "description": "Fetch the Docker context",
                     "default": true
+                  },
+                  "docker_command": {
+                    "type": "string",
+                    "title": "Docker Command",
+                    "description": "Command used to call Docker",
+                    "default": "docker"
+                  },
+                  "filter": {
+                    "type": "string",
+                    "title": "Filter",
+                    "description": "Filter passed to docker ps. See https://docs.docker.com/reference/cli/docker/container/ls/#filter",
+                    "default": ""
                   }
                 },
                 "unevaluatedProperties": false
@@ -2102,6 +2198,41 @@
                     "default": [
                       "mod",
                       "go"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "gradle"
+              }
+            }
+          },
+          "then": {
+            "title": "Gradle Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/gradle",
+            "properties": {
+              "options": {
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/language_options"
+                  }
+                ],
+                "properties": {
+                  "extensions": {
+                    "default": [
+                      "*.gradle",
+                      "*.gradle.kts"
+                    ]
+                  },
+                  "tooling": {
+                    "default": [
+                      "gradle"
                     ]
                   }
                 }
@@ -4198,6 +4329,12 @@
                     "title": "Stopped Icon",
                     "description": "Text/icon to show when stopped",
                     "default": "\uf04d "
+                  },
+                  "ad_icon": {
+                    "type": "string",
+                    "title": "Advertisement Icon",
+                    "description": "Text/icon to show when an advertisement is playing (Windows/WSL)",
+                    "default": "\ueebb "
                   }
                 },
                 "unevaluatedProperties": false
@@ -4790,6 +4927,19 @@
           "if": {
             "properties": {
               "type": {
+                "const": "vimode"
+              }
+            }
+          },
+          "then": {
+            "title": "Vi mode",
+            "description": "https://ohmyposh.dev/docs/segments/system/vimode"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "wakatime"
               }
             }
@@ -5037,6 +5187,31 @@
                     "default": [
                       "zig"
                     ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "zvm"
+              }
+            }
+          },
+          "then": {
+            "title": "ZVM Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/zvm",
+            "properties": {
+              "options": {
+                "properties": {
+                  "zigicon": {
+                    "type": "string",
+                    "title": "Zig Icon",
+                    "description": "icon to display before the version",
+                    "default": "ZVM"
                   }
                 }
               }

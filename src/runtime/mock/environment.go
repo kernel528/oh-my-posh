@@ -95,6 +95,11 @@ func (env *Environment) RunCommand(command string, args ...string) (string, erro
 	return arguments.String(0), arguments.Error(1)
 }
 
+func (env *Environment) RunCommandWithEnv(command string, envs []string, args ...string) (string, error) {
+	arguments := env.Called(command, envs, args)
+	return arguments.String(0), arguments.Error(1)
+}
+
 func (env *Environment) RunShellCommand(shell, command string) string {
 	args := env.Called(shell, command)
 	return args.String(0)
@@ -133,6 +138,14 @@ func (env *Environment) Shell() string {
 func (env *Environment) QueryWindowTitles(processName, windowTitleRegex string) (string, error) {
 	args := env.Called(processName, windowTitleRegex)
 	return args.String(0), args.Error(1)
+}
+
+func (env *Environment) QueryMediaPlayer(player string) (*runtime.MediaInfo, error) {
+	args := env.Called(player)
+	if info, ok := args.Get(0).(*runtime.MediaInfo); ok {
+		return info, args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (env *Environment) WindowsRegistryKeyValue(path string) (*runtime.WindowsRegistryValue, error) {

@@ -10,11 +10,28 @@ export default {
   plugins: [
     './plugins/appinsights'
   ],
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'alternate',
+        type: 'text/plain',
+        title: 'llms.txt',
+        href: '/llms.txt',
+      },
+    },
+  ],
   stylesheets: [
     "https://rsms.me/inter/inter.css",
     "https://fonts.googleapis.com/css2?family=Fira+Code&display=swap"
   ],
   themeConfig: {
+    metadata: [
+      {property: 'og:image', content: 'https://ohmyposh.dev/img/hero.png'},
+      {property: 'og:image:width', content: '1200'},
+      {property: 'og:image:height', content: '630'},
+      {property: 'og:type', content: 'website'},
+    ],
     colorMode: {
       defaultMode: 'light',
       disableSwitch: false,
@@ -135,8 +152,8 @@ export default {
           title: 'Sponsors',
           items: [
             {
-              label: 'Merge Conflict',
-              href: 'https://www.mergeconflict.fm/',
+              label: 'CodeRabbit',
+              href: 'https://coderabbit.link/posh',
             },
           ],
         },

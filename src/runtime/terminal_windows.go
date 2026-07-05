@@ -60,6 +60,15 @@ func (term *Terminal) QueryWindowTitles(processName, windowTitleRegex string) (s
 	return title, err
 }
 
+func (term *Terminal) QueryMediaPlayer(player string) (*MediaInfo, error) {
+	defer log.Trace(time.Now())
+	info, err := queryMediaPlayer(player)
+	if err != nil {
+		log.Error(err)
+	}
+	return info, err
+}
+
 func (term *Terminal) IsWsl() bool {
 	defer log.Trace(time.Now())
 	return false
@@ -97,12 +106,6 @@ func (term *Terminal) TerminalWidth() (int, error) {
 
 	term.CmdFlags.TerminalWidth = int(info.Size.X)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
-
-	// Claude CLI has a 2 character padding on both sides
-	if term.CmdFlags.Shell == "claude" {
-		log.Debug("adjusting terminal width for Claude CLI")
-		term.CmdFlags.TerminalWidth -= 4
-	}
 
 	return term.CmdFlags.TerminalWidth, nil
 }

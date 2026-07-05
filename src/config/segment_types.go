@@ -27,6 +27,7 @@ func init() {
 	gob.Register(&segments.Angular{})
 	gob.Register(&segments.Version{})
 	gob.Register(&segments.Argocd{})
+	gob.Register(&segments.Aspire{})
 	gob.Register(&segments.Aurelia{})
 	gob.Register(&segments.Aws{})
 	gob.Register(&segments.Az{})
@@ -40,6 +41,8 @@ func init() {
 	gob.Register(&segments.CarbonIntensity{})
 	gob.Register(&segments.Cds{})
 	gob.Register(&segments.Copilot{})
+	gob.Register(&segments.CopilotCLI{})
+	gob.Register(&segments.CopilotCLIData{})
 	gob.Register(&segments.Cf{})
 	gob.Register(&segments.CfTarget{})
 	gob.Register(&segments.Claude{})
@@ -68,6 +71,7 @@ func init() {
 	gob.Register(&segments.Commit{})
 	gob.Register(&segments.GitVersion{})
 	gob.Register(&segments.Golang{})
+	gob.Register(&segments.Gradle{})
 	gob.Register(&segments.Haskell{})
 	gob.Register(&segments.Helm{})
 	gob.Register(&segments.IPify{})
@@ -140,6 +144,7 @@ func init() {
 	gob.Register(&segments.UpgradeCache{})
 	gob.Register(&segments.V{})
 	gob.Register(&segments.Vala{})
+	gob.Register(&segments.VIMode{})
 	gob.Register(&segments.Wakatime{})
 	gob.Register(&segments.WinGet{})
 	gob.Register(&segments.WinGetPackage{})
@@ -165,6 +170,8 @@ const (
 	ANGULAR SegmentType = "angular"
 	// ARGOCD writes the current argocd context
 	ARGOCD SegmentType = "argocd"
+	// ASPIRE writes the Aspire apphost status
+	ASPIRE SegmentType = "aspire"
 	// AURELIA writes which aurelia version is currently referenced in package.json
 	AURELIA SegmentType = "aurelia"
 	// AWS writes the active aws context
@@ -203,6 +210,8 @@ const (
 	CONNECTION SegmentType = "connection"
 	// COPILOT writes GitHub Copilot usage statistics
 	COPILOT SegmentType = "copilot"
+	// COPILOTCLI writes GitHub Copilot CLI session information
+	COPILOTCLI SegmentType = "copilot_cli"
 	// CRYSTAL writes the active crystal version
 	CRYSTAL SegmentType = "crystal"
 	// DART writes the active dart version
@@ -235,6 +244,8 @@ const (
 	GITVERSION SegmentType = "gitversion"
 	// GOLANG writes which go version is currently active
 	GOLANG SegmentType = "go"
+	// GRADLE writes the active gradle version
+	GRADLE SegmentType = "gradle"
 	// HASKELL segment
 	HASKELL SegmentType = "haskell"
 	// HELM segment
@@ -363,6 +374,8 @@ const (
 	V SegmentType = "v"
 	// VALA writes the active vala version
 	VALA SegmentType = "vala"
+	// VIMODE writes the active ZSH Vi mode (insert/normal/visual)
+	VIMODE SegmentType = "vimode"
 	// WAKATIME writes tracked time spend in dev editors
 	WAKATIME SegmentType = "wakatime"
 	// WINGET writes the number of available WinGet package updates
@@ -379,6 +392,8 @@ const (
 	YTM SegmentType = "ytm"
 	// ZIG writes the active zig version
 	ZIG SegmentType = "zig"
+	// ZVM writes the active zig version used in the zvm environment
+	ZVM SegmentType = "zvm"
 )
 
 // Segments contains all available prompt segment writers.
@@ -386,6 +401,7 @@ const (
 var Segments = map[SegmentType]func() SegmentWriter{
 	ANGULAR:         func() SegmentWriter { return &segments.Angular{} },
 	ARGOCD:          func() SegmentWriter { return &segments.Argocd{} },
+	ASPIRE:          func() SegmentWriter { return &segments.Aspire{} },
 	AURELIA:         func() SegmentWriter { return &segments.Aurelia{} },
 	AWS:             func() SegmentWriter { return &segments.Aws{} },
 	AZ:              func() SegmentWriter { return &segments.Az{} },
@@ -405,6 +421,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	CMAKE:           func() SegmentWriter { return &segments.Cmake{} },
 	CONNECTION:      func() SegmentWriter { return &segments.Connection{} },
 	COPILOT:         func() SegmentWriter { return &segments.Copilot{} },
+	COPILOTCLI:      func() SegmentWriter { return &segments.CopilotCLI{} },
 	CRYSTAL:         func() SegmentWriter { return &segments.Crystal{} },
 	DART:            func() SegmentWriter { return &segments.Dart{} },
 	DENO:            func() SegmentWriter { return &segments.Deno{} },
@@ -421,6 +438,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	GIT:             func() SegmentWriter { return &segments.Git{} },
 	GITVERSION:      func() SegmentWriter { return &segments.GitVersion{} },
 	GOLANG:          func() SegmentWriter { return &segments.Golang{} },
+	GRADLE:          func() SegmentWriter { return &segments.Gradle{} },
 	HASKELL:         func() SegmentWriter { return &segments.Haskell{} },
 	HELM:            func() SegmentWriter { return &segments.Helm{} },
 	IPIFY:           func() SegmentWriter { return &segments.IPify{} },
@@ -485,6 +503,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	UPGRADE:         func() SegmentWriter { return &segments.Upgrade{} },
 	V:               func() SegmentWriter { return &segments.V{} },
 	VALA:            func() SegmentWriter { return &segments.Vala{} },
+	VIMODE:          func() SegmentWriter { return &segments.VIMode{} },
 	WAKATIME:        func() SegmentWriter { return &segments.Wakatime{} },
 	WINGET:          func() SegmentWriter { return &segments.WinGet{} },
 	WINREG:          func() SegmentWriter { return &segments.WindowsRegistry{} },
@@ -493,6 +512,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	YARN:            func() SegmentWriter { return &segments.Yarn{} },
 	YTM:             func() SegmentWriter { return &segments.Ytm{} },
 	ZIG:             func() SegmentWriter { return &segments.Zig{} },
+	ZVM:             func() SegmentWriter { return &segments.Zvm{} },
 }
 
 func (segment *Segment) MapSegmentWithWriter(env runtime.Environment) error {

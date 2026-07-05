@@ -2215,12 +2215,13 @@
       ]
     },
     {
-      "login": "kkk669",
+      "login": "kkebo",
       "name": "Kenta Kubo",
       "avatar_url": "https://avatars.githubusercontent.com/u/601636?v=4",
-      "profile": "https://kebo.xyz",
+      "profile": "https://kebo.dev",
       "contributions": [
-        "doc"
+        "doc",
+        "code"
       ]
     },
     {
@@ -3577,7 +3578,8 @@
       "profile": "https://mastodontech.de/@martinoe",
       "contributions": [
         "code",
-        "doc"
+        "doc",
+        "design"
       ]
     },
     {
@@ -3594,6 +3596,55 @@
       "name": "Matthew Rothenberg",
       "avatar_url": "https://avatars.githubusercontent.com/u/40650?v=4",
       "profile": "https://mroth.xyz",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Kas1o",
+      "name": "Kase-One-Only",
+      "avatar_url": "https://avatars.githubusercontent.com/u/88198563?v=4",
+      "profile": "https://github.com/Kas1o",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "rightaditya",
+      "name": "Aditya Bhargava",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1624945?v=4",
+      "profile": "https://www.cs.toronto.edu/~aditya",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "DamianEdwards",
+      "name": "Damian Edwards",
+      "avatar_url": "https://avatars.githubusercontent.com/u/249088?v=4",
+      "profile": "https://blog.damianedwards.com",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "maddymontaquila",
+      "name": "Maddy Montaquila (Leger) (Not a David)",
+      "avatar_url": "https://avatars.githubusercontent.com/u/12660687?v=4",
+      "profile": "http://aspire.dev",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "swmarks",
+      "name": "swmarks",
+      "avatar_url": "https://avatars.githubusercontent.com/u/9942801?v=4",
+      "profile": "https://github.com/swmarks",
       "contributions": [
         "code"
       ]

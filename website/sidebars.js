@@ -55,6 +55,7 @@ export default {
           items: [
             "segments/cli/angular",
             "segments/cli/argocd",
+            "segments/cli/aspire",
             "segments/cli/aurelia",
             "segments/cli/bazel",
             "segments/cli/buf",
@@ -62,11 +63,13 @@ export default {
             "segments/cli/claude",
             "segments/cli/cmake",
             "segments/cli/copilot",
+            "segments/cli/copilot-cli",
             "segments/cli/deno",
             "segments/cli/docker",
             "segments/cli/firebase",
             "segments/cli/flutter",
             "segments/cli/gitversion",
+            "segments/cli/gradle",
             "segments/cli/helm",
             "segments/cli/kubectl",
             "segments/cli/mvn",
@@ -87,6 +90,7 @@ export default {
             "segments/cli/unity",
             "segments/cli/xmake",
             "segments/cli/yarn",
+            "segments/cli/zvm",
           ]
         },
         {
@@ -193,6 +197,7 @@ export default {
             "segments/system/text",
             "segments/system/time",
             "segments/system/upgrade",
+            "segments/system/vimode",
             "segments/system/winget",
             "segments/system/winreg",
           ]
