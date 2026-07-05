@@ -24,7 +24,7 @@ jobs:
         working-directory: ${{ github.workspace }}/src
     steps:
     - name: Checkout code
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
     - name: Install Go 🗳
       uses: ./.github/workflows/composite/bootstrap-go
     - name: Golang CI
@@ -40,4 +40,4 @@ jobs:
         go install golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest
         modernize "./..."
     - name: Unit Tests
-      run: go test -v ./...
+      run: go test "./..."

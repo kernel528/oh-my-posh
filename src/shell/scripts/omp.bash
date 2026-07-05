@@ -11,6 +11,7 @@ export PYENV_VIRTUALENV_DISABLE_PROMPT=1
 # global variables
 _omp_start_time=''
 _omp_stack_count=0
+_omp_job_count=0
 _omp_execution_time=-1
 _omp_no_status=true
 _omp_status=0
@@ -85,6 +86,7 @@ function _omp_get_primary() {
                 --pipestatus="${_omp_pipestatus[*]}" \
                 --no-status="$_omp_no_status" \
                 --execution-time="$_omp_execution_time" \
+                --job-count="$_omp_job_count" \
                 --stack-count="$_omp_stack_count" \
                 --terminal-width="${COLUMNS-0}" |
                 tr -d '\0'
@@ -114,6 +116,9 @@ function _omp_hook() {
     fi
 
     _omp_stack_count=$((${#DIRSTACK[@]} - 1))
+    local _omp_jobs=()
+    _omp_jobs=($(jobs -p 2>/dev/null))
+    _omp_job_count=${#_omp_jobs[@]}
 
     _omp_execution_time=-1
     if [[ $_omp_start_time ]]; then
@@ -158,7 +163,13 @@ function _omp_install_hook() {
         prompt_command+=("$cmd")
     done
 
-    PROMPT_COMMAND=("${prompt_command[@]}" _omp_hook)
+    # When VS Code shell integration is active, prepend so _omp_hook sets PS1 before
+    # VS Code's __vsc_prompt_cmd_original wraps it with A/B shell integration sequences.
+    if [[ "${TERM_PROGRAM-}" == "vscode" ]]; then
+        PROMPT_COMMAND=(_omp_hook "${prompt_command[@]}")
+    else
+        PROMPT_COMMAND=("${prompt_command[@]}" _omp_hook)
+    fi
 }
 
 _omp_install_hook

@@ -1,5 +1,14 @@
+# APM
+apm_modules/
+.github/skills/*
+.github/instructions/*
+!.github/skills/segment-create/
+!.github/skills/segment-docs/
+.agents/
+
 # Others
 
+.specs/
 .fleet/
 src/test/umbraco/obj/
 src/keys
@@ -7,6 +16,7 @@ src/keys
 *.wixpdb
 packages/msi/Microsoft.Trusted.Signing.Client
 .claude
+.styles
 
 # Created by https://www.toptal.com/developers/gitignore/api/node,go,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=node,go,visualstudiocode

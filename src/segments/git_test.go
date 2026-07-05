@@ -126,6 +126,16 @@ func TestEnabledInWorktree(t *testing.T) {
 			ExpectedRealFolder:    TestRootPath + "dev/",
 			ExpectedRootFolder:    TestRootPath + "dev/separate/.git/posh",
 		},
+		{
+			Case:                  "worktree with relative gitdir path",
+			ExpectedEnabled:       true,
+			WorkingFolder:         TestRootPath + "dev/.git/worktrees/folder_worktree",
+			WorkingFolderAddon:    "gitdir",
+			WorkingFolderContent:  "../../../worktree/.git\n",
+			ExpectedWorkingFolder: TestRootPath + "dev/.git/worktrees/folder_worktree",
+			ExpectedRealFolder:    TestRootPath + "dev/worktree",
+			ExpectedRootFolder:    TestRootPath + dotGit,
+		},
 	}
 	fileInfo := &runtime.FileInfo{
 		Path:         TestRootPath + dotGit,
@@ -713,9 +723,9 @@ func TestGitUpstream(t *testing.T) {
 
 		g := &Git{
 			Scm: Scm{
-				command: GITCOMMAND,
+				command:  GITCOMMAND,
+				Upstream: "origin/main",
 			},
-			Upstream: "origin/main",
 		}
 		g.Init(props, env)
 
@@ -756,9 +766,11 @@ func TestGetBranchStatus(t *testing.T) {
 		}
 
 		g := &Git{
+			Scm: Scm{
+				Upstream: tc.Upstream,
+			},
 			Ahead:        tc.Ahead,
 			Behind:       tc.Behind,
-			Upstream:     tc.Upstream,
 			UpstreamGone: tc.UpstreamGone,
 		}
 		g.Init(props, new(mock.Environment))
@@ -1418,9 +1430,9 @@ func TestPushStatusAheadAndBehind(t *testing.T) {
 				command:     "git",
 				repoRootDir: "/dir",
 				scmDir:      "/dir/.git",
+				Upstream:    "origin/main",
 			},
-			Ref:      "main",
-			Upstream: "origin/main",
+			Ref: "main",
 		}
 
 		props := options.Map{

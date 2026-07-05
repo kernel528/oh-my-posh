@@ -23,10 +23,20 @@ func funcMap() template.FuncMap {
 		"hresult":      hresult,
 		"trunc":        trunc,
 		"truncE":       TruncE,
+		"cmd":          cmd,
 		"readFile":     readFile,
 		"stat":         stat,
 		"dir":          filepath.Dir,
 		"base":         filepath.Base,
+		// Locale-aware date/time formatting using OS regional settings.
+		"localeShortDate": localeShortDate,
+		"localeShortTime": localeShortTime,
+		// Override sprig date functions to support string epoch values (e.g. output of unixEpoch).
+		"date":           ompDate,
+		"date_in_zone":   ompDateInZone,
+		"dateInZone":     ompDateInZone,
+		"htmlDate":       ompHTMLDate,
+		"htmlDateInZone": ompHTMLDateInZone,
 	}
 
 	for key, fun := range sprig.TxtFuncMap() {

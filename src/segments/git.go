@@ -149,7 +149,6 @@ type Git struct {
 	ShortHash      string
 	Hash           string
 	BranchStatus   string
-	Upstream       string
 	HEAD           string
 	UpstreamIcon   string
 	UpstreamURL    string
@@ -187,13 +186,13 @@ func (g *Git) Enabled() bool {
 	}
 
 	fetchUser := g.options.Bool(FetchUser, false)
-	if fetchUser {
-		g.setUser()
-	}
-
 	g.RepoName = g.repoName()
 
 	if g.IsBare {
+		if fetchUser {
+			g.setUser()
+		}
+
 		g.getBareRepoInfo()
 		return true
 	}
@@ -208,19 +207,36 @@ func (g *Git) Enabled() bool {
 		displayStatus = false
 	}
 
+	// Phase 1: setUser is independent, run it alongside setStatus
+	var wg sync.WaitGroup
+
+	if fetchUser {
+		wg.Go(g.setUser)
+	}
+
 	if displayStatus {
 		g.setStatus()
-		g.setHEADStatus()
+
+		// Phase 2: fan out work that depends only on setStatus results
+		wg.Go(g.setHEADStatus)
+		wg.Go(g.setPushStatus)
+
+		if g.options.Bool(FetchUpstreamIcon, false) {
+			wg.Go(func() {
+				g.UpstreamIcon = g.getUpstreamIcon()
+			})
+		}
+
 		g.setBranchStatus()
-		g.setPushStatus()
 	} else {
 		g.updateHEADReference()
+
+		if g.options.Bool(FetchUpstreamIcon, false) {
+			g.UpstreamIcon = g.getUpstreamIcon()
+		}
 	}
 
-	if g.options.Bool(FetchUpstreamIcon, false) {
-		g.UpstreamIcon = g.getUpstreamIcon()
-	}
-
+	wg.Wait()
 	return true
 }
 
@@ -313,8 +329,7 @@ func (g *Git) StashCount() int {
 		return 0
 	}
 
-	lines := strings.Split(stashContent, "\n")
-	g.stashCount = len(lines)
+	g.stashCount = strings.Count(stashContent, "\n") + 1 // +1: fileContent() trims
 	return g.stashCount
 }
 
@@ -384,8 +399,20 @@ func (g *Git) isRepo(gitdir *runtime.FileInfo) bool {
 }
 
 func (g *Git) setUser() {
-	g.User.Name = g.getGitCommandOutput("config", "user.name")
-	g.User.Email = g.getGitCommandOutput("config", "user.email")
+	output := g.getGitCommandOutput("config", "--get-regexp", "^user\\.")
+	for line := range strings.SplitSeq(output, "\n") {
+		key, val, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+
+		switch key {
+		case "user.name":
+			g.User.Name = val
+		case "user.email":
+			g.User.Email = val
+		}
+	}
 }
 
 func (g *Git) isBareRepo(gitDir *runtime.FileInfo) bool {
@@ -473,6 +500,8 @@ func (g *Git) hasWorktree(gitdir *runtime.FileInfo) bool {
 			gitDir := filepath.Join(g.scmDir, "gitdir")
 			realGitFolder := g.env.FileContent(gitDir)
 			g.repoRootDir = strings.TrimSuffix(realGitFolder, ".git\n")
+			// resolve relative paths (worktree.useRelativePaths = true)
+			g.repoRootDir = resolveGitPath(g.scmDir, g.repoRootDir)
 			g.scmDir = g.scmDir[:worktreeIndex]
 			g.mainSCMDir = g.scmDir
 			g.IsWorkTree = true
@@ -494,6 +523,8 @@ func (g *Git) hasWorktree(gitdir *runtime.FileInfo) bool {
 		g.scmDir = g.mainSCMDir[:worktreeIndex]
 		gitDirContent := g.env.FileContent(gitDir)
 		g.repoRootDir = strings.TrimSuffix(gitDirContent, ".git\n")
+		// resolve relative paths (worktree.useRelativePaths = true)
+		g.repoRootDir = resolveGitPath(g.mainSCMDir, g.repoRootDir)
 		g.IsWorkTree = true
 		return true
 	}
@@ -552,15 +583,21 @@ func (g *Git) setPushStatus() {
 		return
 	}
 
-	ahead := g.getGitCommandOutput("rev-list", "--count", pushRemote+"..HEAD")
-	if ahead != "" {
-		g.PushAhead, _ = strconv.Atoi(strings.TrimSpace(ahead))
-	}
+	var wg sync.WaitGroup
 
-	behind := g.getGitCommandOutput("rev-list", "--count", "HEAD.."+pushRemote)
-	if behind != "" {
-		g.PushBehind, _ = strconv.Atoi(strings.TrimSpace(behind))
-	}
+	wg.Go(func() {
+		if v := g.getGitCommandOutput("rev-list", "--count", pushRemote+"..HEAD"); v != "" {
+			g.PushAhead, _ = strconv.Atoi(strings.TrimSpace(v))
+		}
+	})
+
+	wg.Go(func() {
+		if v := g.getGitCommandOutput("rev-list", "--count", "HEAD.."+pushRemote); v != "" {
+			g.PushBehind, _ = strconv.Atoi(strings.TrimSpace(v))
+		}
+	})
+
+	wg.Wait()
 }
 
 func (g *Git) getPushRemote() string {
@@ -783,7 +820,7 @@ func (g *Git) setStatus() {
 
 		if strings.HasPrefix(line, BRANCHSTATUS) && len(line) > len(BRANCHSTATUS) {
 			status := line[len(BRANCHSTATUS):]
-			splitted := strings.Split(status, " ")
+			splitted := strings.SplitN(status, " ", 3)
 			if len(splitted) >= 2 {
 				g.Ahead, _ = strconv.Atoi(splitted[0])
 				behind, _ := strconv.Atoi(splitted[1])
