@@ -35,9 +35,11 @@ export default {
         "configuration/title",
         "configuration/colors",
         "configuration/templates",
+        "configuration/data",
         "configuration/secondary-prompt",
         "configuration/debug-prompt",
         "configuration/transient",
+        "configuration/streaming",
         "configuration/line-error",
         "configuration/tooltips",
         "configuration/sample",
@@ -169,6 +171,7 @@ export default {
           label: "🗂️ Source control",
           collapsed: true,
           items: [
+            "segments/scm/dvc",
             "segments/scm/fossil",
             "segments/scm/git",
             "segments/scm/jujutsu",
@@ -239,14 +242,6 @@ export default {
       collapsed: true,
       items: [
         "advanced/mcp-server",
-      ],
-    },
-    {
-      type: "category",
-      label: "🧪 Experimental",
-      collapsed: true,
-      items: [
-        "experimental/streaming",
       ],
     },
     "faq",

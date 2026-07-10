@@ -20,6 +20,8 @@ var cycle *color.Cycle = &color.Cycle{}
 type Engine struct {
 	Env                   runtime.Environment
 	streamingResults      chan *config.Segment
+	abort                 chan struct{}
+	done                  chan struct{}
 	Config                *config.Config
 	activeSegment         *config.Segment
 	previousActiveSegment *config.Segment
@@ -201,8 +203,17 @@ func (e *Engine) getTitleTemplateText() string {
 	return ""
 }
 
-func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
-	blockText, length := e.writeBlockSegments(block)
+// renderLaunchedBlock renders a block using pre-collected segment results
+// (see drainBlockResults). executed must be fully populated for every block
+// in the prompt before this is called so that cross-block .Segments.X
+// dependencies resolve in both directions.
+func (e *Engine) renderLaunchedBlock(block *config.Block, results []*config.Segment, executed map[string]bool, cancelNewline bool) bool {
+	var blockText string
+	var length int
+
+	if results != nil {
+		blockText, length = e.renderBlockSegments(results, block, executed)
+	}
 
 	// do not print anything when we don't have any text unless forced
 	if !block.Force && length == 0 {

@@ -43,6 +43,8 @@ type Segment struct {
 	Cache                  *Cache      `json:"cache,omitempty" toml:"cache,omitempty" yaml:"cache,omitempty"`
 	Alias                  string      `json:"alias,omitempty" toml:"alias,omitempty" yaml:"alias,omitempty"`
 	styleCache             SegmentStyle
+	foregroundCache        color.Ansi
+	backgroundCache        color.Ansi
 	name                   string
 	LeadingDiamond         string         `json:"leading_diamond,omitempty" toml:"leading_diamond,omitempty" yaml:"leading_diamond,omitempty"`
 	TrailingDiamond        string         `json:"trailing_diamond,omitempty" toml:"trailing_diamond,omitempty" yaml:"trailing_diamond,omitempty"`
@@ -77,6 +79,9 @@ type Segment struct {
 	Toggled                bool           `json:"toggled,omitempty" toml:"toggled,omitempty" yaml:"toggled,omitempty"`
 	Pending                bool           `json:"-" toml:"-" yaml:"-"`
 	Interactive            bool           `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
+	foregroundResolved     bool
+	backgroundResolved     bool
+	needsEvaluated         bool
 }
 
 // segmentAlias is used to avoid recursion during unmarshaling
@@ -176,6 +181,10 @@ func (segment *Segment) Execute(env runtime.Environment) {
 		return
 	}
 
+	if segment.restoreData() {
+		return
+	}
+
 	cacheRestored := segment.restoreCache()
 	if cacheRestored && !env.Flags().Streaming {
 		return
@@ -191,9 +200,25 @@ func (segment *Segment) Execute(env runtime.Environment) {
 		}
 	}()
 
-	// Create Job for this goroutine so child processes can be tracked and killed on timeout
-	if err := runjobs.CreateJobForGoroutine(segment.Name()); err != nil {
-		log.Errorf("failed to create job for goroutine (segment: %s): %v", segment.Name(), err)
+	// Only segments with a timeout can ever be killed via
+	// KillGoroutineChildren (see prompt/segments.go executeSegmentWithTimeout),
+	// so only those need a Job object to track/terminate their child
+	// processes. Skipping this for the common case (no timeout configured)
+	// avoids two syscalls + a map insert per segment per prompt.
+	if segment.Timeout > 0 {
+		if err := runjobs.CreateJobForGoroutine(segment.Name()); err != nil {
+			log.Errorf("failed to create job for goroutine (segment: %s): %v", segment.Name(), err)
+		}
+
+		// Release the Job object (Windows) once this goroutine is done
+		// spawning/waiting on children. cmd.Run blocks until its child exits,
+		// so by the time Execute returns - on any path below, including a
+		// panic unwind - no process we intended to keep alive is still
+		// assigned to the job, making it safe to close despite
+		// JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. If the timeout path already
+		// terminated/closed the job concurrently, this is a no-op; see the
+		// ownership invariant documented on jobs.CloseGoroutineJob.
+		defer runjobs.CloseGoroutineJob()
 	}
 
 	segment.Enabled = segment.writer.Enabled()
@@ -209,13 +234,18 @@ func (segment *Segment) Render(index int, force bool) bool {
 		segment.Force = true
 	}
 
+	// Foreground/background may be overridden directly (e.g. color cycling) between
+	// render passes, so the memoized values must not survive across calls to Render.
+	segment.foregroundResolved = false
+	segment.backgroundResolved = false
+
 	segment.writer.SetIndex(index)
 
 	text := segment.string()
 
 	// Only update Enabled if segment is NOT pending (avoid race with Execute goroutine)
 	if !segment.Pending {
-		segment.Enabled = segment.Force || len(strings.ReplaceAll(text, " ", "")) > 0
+		segment.Enabled = segment.Force || strings.ContainsFunc(text, func(r rune) bool { return r != ' ' })
 
 		if !segment.Enabled {
 			template.Cache.RemoveSegmentData(segment.Name())
@@ -241,21 +271,35 @@ func (segment *Segment) SetText(text string) {
 }
 
 func (segment *Segment) ResolveForeground() color.Ansi {
+	if segment.foregroundResolved {
+		return segment.foregroundCache
+	}
+
 	if len(segment.ForegroundTemplates) != 0 {
 		match := segment.ForegroundTemplates.FirstMatch(segment.writer, segment.Foreground.String())
 		segment.Foreground = color.Ansi(match)
 	}
 
-	return segment.Foreground
+	segment.foregroundCache = segment.Foreground
+	segment.foregroundResolved = true
+
+	return segment.foregroundCache
 }
 
 func (segment *Segment) ResolveBackground() color.Ansi {
+	if segment.backgroundResolved {
+		return segment.backgroundCache
+	}
+
 	if len(segment.BackgroundTemplates) != 0 {
 		match := segment.BackgroundTemplates.FirstMatch(segment.writer, segment.Background.String())
 		segment.Background = color.Ansi(match)
 	}
 
-	return segment.Background
+	segment.backgroundCache = segment.Background
+	segment.backgroundResolved = true
+
+	return segment.backgroundCache
 }
 
 func (segment *Segment) ResolveStyle() SegmentStyle {
@@ -285,6 +329,21 @@ func (segment *Segment) hasCache() bool {
 	return segment.Cache != nil && !segment.Cache.Duration.IsEmpty()
 }
 
+// DataKey returns the identity used to look up segment data: the segment's
+// alias if set, falling back to its type.
+func (segment *Segment) DataKey() string {
+	if segment.Alias != "" {
+		return segment.Alias
+	}
+
+	return string(segment.Type)
+}
+
+// Writer returns the segment's underlying SegmentWriter.
+func (segment *Segment) Writer() SegmentWriter {
+	return segment.writer
+}
+
 func (segment *Segment) isToggled() bool {
 	togglesMap, OK := cache.Get[map[string]bool](cache.Session, cache.TOGGLECACHE)
 	if !OK || len(togglesMap) == 0 {
@@ -292,12 +351,7 @@ func (segment *Segment) isToggled() bool {
 		return false
 	}
 
-	segmentName := segment.Alias
-	if segmentName == "" {
-		segmentName = string(segment.Type)
-	}
-
-	if togglesMap[segmentName] {
+	if togglesMap[segment.DataKey()] {
 		log.Debugf("segment toggled off: %s", segment.Name())
 		return true
 	}
@@ -328,6 +382,31 @@ func (segment *Segment) restoreCache() bool {
 	log.Debug("restored segment from cache: ", segment.Name())
 
 	segment.restored = true
+
+	return true
+}
+
+// restoreData replays a segment's writer state from the data file supplied via
+// runtime.Flags.SegmentData, bypassing the real runtime entirely. This lets
+// segments render from a recorded fixture instead of probing the environment.
+func (segment *Segment) restoreData() bool {
+	data, OK := segment.env.Flags().SegmentData[segment.DataKey()]
+	if !OK {
+		return false
+	}
+
+	err := json.Unmarshal(data, &segment.writer)
+	if err != nil {
+		log.Error(err)
+		return false
+	}
+
+	segment.Enabled = true
+	segment.restored = true
+
+	template.Cache.AddSegmentData(segment.Name(), segment.writer)
+
+	log.Debug("restored segment from data: ", segment.Name())
 
 	return true
 }
@@ -429,7 +508,16 @@ func (segment *Segment) cwdExcluded() bool {
 }
 
 func (segment *Segment) evaluateNeeds() {
+	if segment.needsEvaluated {
+		return
+	}
+
+	segment.needsEvaluated = true
+
 	value := segment.Template
+	if value == "" && segment.writer != nil {
+		value = segment.writer.Template()
+	}
 
 	if len(segment.ForegroundTemplates) != 0 {
 		value += strings.Join(segment.ForegroundTemplates, "")
