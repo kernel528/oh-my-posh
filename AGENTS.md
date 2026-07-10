@@ -1,5 +1,9 @@
 # oh-my-posh AGENTS.md
 
+For general coding guidelines, commit conventions, and agent workflows, see [AGENTS.md](../AGENTS.md).
+
+## Tech Stack
+
 | Layer                     | Technology                    |
 | ------------------------- | ----------------------------- |
 | Core engine               | Go (module root: `src/`)      |
