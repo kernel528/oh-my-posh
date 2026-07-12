@@ -2,6 +2,17 @@
 
 For general coding guidelines, commit conventions, and agent workflows, see [AGENTS.md](../AGENTS.md).
 
+Project knowledge lives at:
+
+`~/Projects/Agentic_Engineering/projects/shell-tools/ohmyzsh`
+
+Read before work:
+- `project-profile.md`
+- `current-work.md`
+- `ai-handoff.md`
+- `roadmap.md`
+- `decisions.md`
+
 ## Tech Stack
 
 | Layer                     | Technology                    |
