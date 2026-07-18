@@ -8,7 +8,9 @@
     <ItemGroup>
         <PackageReference Include="uMarketingSuite" Version="1.23.0" />
         <PackageReference Include="Umbraco.TheStarterKit" Version="11.0.0" />
-        <PackageReference Include="Umbraco.Cms" Version="12.1.2" />
+        <!-- This is a comment -->
+        <!--PackageReference Include="Umbraco.Cms" Version="12.3.4" /-->
+        <PackageReference Include="Umbraco.Cms" Version="13.5.3" />
     </ItemGroup>
 
     <ItemGroup>
