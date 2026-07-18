@@ -21,6 +21,7 @@ import (
 const (
 	ResolveTargetFromSolution options.Option = "resolve_target_from_solution"
 	SolutionSearchDepth       options.Option = "solution_search_depth"
+	Priority                  options.Option = "priority"
 )
 
 type ProjectItem struct {
@@ -111,7 +112,7 @@ func (n *Project) Enabled() bool {
 		},
 		{
 			Name:    dartToolName,
-			Files:   []string{"pubspec.yaml"},
+			Files:   []string{pubspecFileName},
 			Fetcher: n.getDartPackage,
 		},
 		{
@@ -139,6 +140,10 @@ func (n *Project) Enabled() bool {
 			Files:   []string{"*.psd1"},
 			Fetcher: n.getPowerShellModuleData,
 		},
+	}
+
+	if priority := n.options.StringArray(Priority, nil); len(priority) != 0 {
+		n.projects = reorderByPriority(n.projects, priority)
 	}
 
 	for _, item := range n.projects {
@@ -169,6 +174,39 @@ func (n *Project) Template() string {
 
 func (n *Project) hasProjectFile(p *ProjectItem) bool {
 	return slices.ContainsFunc(p.Files, n.env.HasFiles)
+}
+
+// reorderByPriority moves the items named in priority to the front of items, in the
+// given order. Items not named in priority keep their original relative order and are
+// appended afterward; names in priority that don't match any item are ignored.
+func reorderByPriority(items []*ProjectItem, priority []string) []*ProjectItem {
+	byName := make(map[string]*ProjectItem, len(items))
+	for _, item := range items {
+		byName[item.Name] = item
+	}
+
+	promoted := make(map[string]bool, len(priority))
+	ordered := make([]*ProjectItem, 0, len(items))
+
+	for _, name := range priority {
+		item, ok := byName[name]
+		if !ok || promoted[name] {
+			continue
+		}
+
+		ordered = append(ordered, item)
+		promoted[name] = true
+	}
+
+	for _, item := range items {
+		if promoted[item.Name] {
+			continue
+		}
+
+		ordered = append(ordered, item)
+	}
+
+	return ordered
 }
 
 func (n *Project) getNodePackage(item ProjectItem) *ProjectData {
@@ -319,6 +357,18 @@ func (n *Project) getDotnetProject(item ProjectItem) *ProjectData {
 		maxDepth := n.options.Int(SolutionSearchDepth, 2)
 		if projContent := n.findProjectFile(files, maxDepth); projContent != "" {
 			values = regex.FindNamedRegexMatch(tag, projContent)
+			if len(values) != 0 {
+				target = values["TFM"]
+			}
+		}
+	}
+
+	// mirror MSBuild's implicit import of Directory.Build.props when the
+	// project/solution itself does not define a TargetFramework
+	if target == "" {
+		if props, err := n.env.HasParentFilePath("Directory.Build.props", false); err == nil {
+			propsContent := n.env.FileContent(props.Path)
+			values = regex.FindNamedRegexMatch(tag, propsContent)
 			if len(values) != 0 {
 				target = values["TFM"]
 			}

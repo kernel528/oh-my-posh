@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -41,7 +43,8 @@ type Segment struct {
 	Options                options.Map `json:"options,omitempty" toml:"options,omitempty" yaml:"options,omitempty"`
 	Properties             options.Map `json:"-" toml:"properties,omitempty" yaml:"-"`
 	Cache                  *Cache      `json:"cache,omitempty" toml:"cache,omitempty" yaml:"cache,omitempty"`
-	Alias                  string      `json:"alias,omitempty" toml:"alias,omitempty" yaml:"alias,omitempty"`
+	presentFields          map[string]bool
+	Alias                  string `json:"alias,omitempty" toml:"alias,omitempty" yaml:"alias,omitempty"`
 	styleCache             SegmentStyle
 	foregroundCache        color.Ansi
 	backgroundCache        color.Ansi
@@ -49,6 +52,7 @@ type Segment struct {
 	LeadingDiamond         string         `json:"leading_diamond,omitempty" toml:"leading_diamond,omitempty" yaml:"leading_diamond,omitempty"`
 	TrailingDiamond        string         `json:"trailing_diamond,omitempty" toml:"trailing_diamond,omitempty" yaml:"trailing_diamond,omitempty"`
 	Template               string         `json:"template,omitempty" toml:"template,omitempty" yaml:"template,omitempty"`
+	RightTemplate          string         `json:"right_template,omitempty" toml:"right_template,omitempty" yaml:"right_template,omitempty"`
 	Foreground             color.Ansi     `json:"foreground,omitempty" toml:"foreground,omitempty" yaml:"foreground,omitempty"`
 	TemplatesLogic         template.Logic `json:"templates_logic,omitempty" toml:"templates_logic,omitempty" yaml:"templates_logic,omitempty"`
 	PowerlineSymbol        string         `json:"powerline_symbol,omitempty" toml:"powerline_symbol,omitempty" yaml:"powerline_symbol,omitempty"`
@@ -58,6 +62,7 @@ type Segment struct {
 	Style                  SegmentStyle   `json:"style,omitempty" toml:"style,omitempty" yaml:"style,omitempty"`
 	LeadingPowerlineSymbol string         `json:"leading_powerline_symbol,omitempty" toml:"leading_powerline_symbol,omitempty" yaml:"leading_powerline_symbol,omitempty"`
 	Placeholder            string         `json:"placeholder,omitempty" toml:"placeholder,omitempty" yaml:"placeholder,omitempty"`
+	FallbackTemplate       string         `json:"fallback_template,omitempty" toml:"fallback_template,omitempty" yaml:"fallback_template,omitempty"`
 	Tips                   []string       `json:"tips,omitempty" toml:"tips,omitempty" yaml:"tips,omitempty"`
 	BackgroundTemplates    template.List  `json:"background_templates,omitempty" toml:"background_templates,omitempty" yaml:"background_templates,omitempty"`
 	Templates              template.List  `json:"templates,omitempty" toml:"templates,omitempty" yaml:"templates,omitempty"`
@@ -78,10 +83,27 @@ type Segment struct {
 	restored               bool           `json:"-" toml:"-" yaml:"-"`
 	Toggled                bool           `json:"toggled,omitempty" toml:"toggled,omitempty" yaml:"toggled,omitempty"`
 	Pending                bool           `json:"-" toml:"-" yaml:"-"`
-	Interactive            bool           `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
-	foregroundResolved     bool
-	backgroundResolved     bool
-	needsEvaluated         bool
+	// Killed is set by the engine when the segment's timeout expired and its
+	// child processes were killed; it blocks fallback_template rendering.
+	Killed              bool `json:"-" toml:"-" yaml:"-"`
+	Interactive         bool `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
+	MultilineKeepPrompt bool `json:"multiline_keepprompt,omitempty" toml:"multiline_keepprompt,omitempty" yaml:"multiline_keepprompt,omitempty"`
+	foregroundResolved  bool
+	backgroundResolved  bool
+	needsEvaluated      bool
+	evaluated           bool
+}
+
+// fieldPresent reports whether name (a json tag key) was present in the
+// source segment entry. A nil presentFields map means presence was never
+// recorded, in which case every field is treated as present, preserving
+// merge's legacy unconditional-overwrite behavior for such segments.
+func (segment *Segment) fieldPresent(name string) bool {
+	if segment.presentFields == nil {
+		return true
+	}
+
+	return segment.presentFields[name]
 }
 
 // segmentAlias is used to avoid recursion during unmarshaling
@@ -222,12 +244,13 @@ func (segment *Segment) Execute(env runtime.Environment) {
 	}
 
 	segment.Enabled = segment.writer.Enabled()
+	segment.evaluated = true
 }
 
 func (segment *Segment) Render(index int, force bool) bool {
 	// Allow pending segments to render (they'll show "..." text)
 	if !segment.Pending && !segment.Enabled && !force {
-		return false
+		return segment.renderFallback(index)
 	}
 
 	if force {
@@ -257,6 +280,46 @@ func (segment *Segment) Render(index int, force bool) bool {
 	segment.setCache()
 
 	// We do this to make `.Text` available for a cross-segment reference in an extra prompt.
+	template.Cache.AddSegmentData(segment.Name(), segment.writer)
+
+	return true
+}
+
+// renderFallback attempts to render FallbackTemplate when a segment would
+// otherwise be hidden because its writer's Enabled() returned false. It
+// requires the writer to have completed its evaluation; segments hidden for other
+// reasons (toggled off, folder include/exclude, width constraints, or a
+// writer mapping error) never set evaluated, so they keep the silent-omission
+// behavior. Segments killed by their timeout are excluded via Killed rather
+// than evaluated, because their Execute goroutine keeps running after the
+// kill and may still complete the evaluation before rendering starts.
+func (segment *Segment) renderFallback(index int) bool {
+	if segment.FallbackTemplate == "" || !segment.evaluated || segment.Killed {
+		return false
+	}
+
+	text, err := template.Render(segment.FallbackTemplate, segment.writer)
+	if err != nil {
+		text = err.Error()
+	}
+
+	if !strings.ContainsFunc(text, func(r rune) bool { return r != ' ' }) {
+		return false
+	}
+
+	// Foreground/background may be overridden directly (e.g. color cycling) between
+	// render passes, so the memoized values must not survive across calls to Render.
+	segment.foregroundResolved = false
+	segment.backgroundResolved = false
+
+	segment.writer.SetIndex(index)
+	segment.Enabled = true
+	segment.SetText(text)
+
+	// Intentionally skip setCache(): the writer is zero/partially hydrated
+	// here, and caching it would make restoreCache() later resurrect a
+	// disabled writer as enabled while rendering the main template against
+	// empty data.
 	template.Cache.AddSegmentData(segment.Name(), segment.writer)
 
 	return true
@@ -365,15 +428,33 @@ func (segment *Segment) restoreCache() bool {
 	}
 
 	key, store := segment.cacheKeyAndStore()
-	data, OK := cache.Get[string](store, key)
+
+	data, OK := cache.Get[any](store, key)
 	if !OK {
 		log.Debugf("no cache found for segment: %s, key: %s", segment.Name(), key)
 		return false
 	}
 
-	err := json.Unmarshal([]byte(data), &segment.writer)
-	if err != nil {
-		log.Error(err)
+	switch v := data.(type) {
+	case []byte:
+		// Decode into the writer initialized by MapSegmentWithWriter instead of
+		// replacing it: the snapshot only carries exported fields, while the
+		// writer's unexported runtime state (env, options) must stay intact or
+		// any method relying on it panics after a restore.
+		if err := gob.NewDecoder(bytes.NewReader(v)).Decode(segment.writer); err != nil {
+			log.Error(err)
+			cache.Delete(store, key)
+			return false
+		}
+	case string:
+		// legacy JSON cache entry, remove it so it gets re-cached in the new format
+		log.Debugf("removing legacy cache key: %s", key)
+		cache.Delete(store, key)
+		return false
+	default:
+		log.Debugf("unexpected cache type for segment: %s, key: %s", segment.Name(), key)
+		cache.Delete(store, key)
+		return false
 	}
 
 	segment.Enabled = true
@@ -421,17 +502,20 @@ func (segment *Segment) setCache() {
 		return
 	}
 
-	data, err := json.Marshal(segment.writer)
-	if err != nil {
+	// Store a gob snapshot rather than the writer itself. The writer is a live
+	// object that render passes keep mutating, so caching it directly would
+	// share mutable state through the cache; and once persisted to disk it
+	// would come back without its unexported runtime state (env, options).
+	// The snapshot is immutable and restoreCache overlays it onto a freshly
+	// initialized writer. An encode failure only skips caching this segment.
+	var data bytes.Buffer
+	if err := gob.NewEncoder(&data).Encode(segment.writer); err != nil {
 		log.Error(err)
 		return
 	}
 
-	// TODO: check if we can make segmentwriter a generic Type indicator
-	// that way we can actually get the value straight from cache.Get
-	// and marchalling is obsolete
 	key, store := segment.cacheKeyAndStore()
-	cache.Set(store, key, string(data), segment.Cache.Duration)
+	cache.Set(store, key, data.Bytes(), segment.Cache.Duration)
 }
 
 func (segment *Segment) cacheKeyAndStore() (string, cache.Store) {
@@ -529,6 +613,10 @@ func (segment *Segment) evaluateNeeds() {
 
 	if len(segment.Templates) != 0 {
 		value += strings.Join(segment.Templates, "")
+	}
+
+	if segment.FallbackTemplate != "" {
+		value += segment.FallbackTemplate
 	}
 
 	if !strings.Contains(value, ".Segments.") {

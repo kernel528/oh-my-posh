@@ -3,6 +3,7 @@ package terminal
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -62,6 +63,8 @@ var (
 
 	Shell   string
 	Program string
+
+	progressTerminals []string
 
 	formats *shell.Formats
 
@@ -172,6 +175,7 @@ func Init(sh string) {
 
 	color.TrueColor = Program != AppleTerminal
 
+	progressTerminals = []string{WindowsTerminal}
 	formats = shell.GetFormats(Shell)
 
 	escapePrefix, escapeSuffix = "", ""
@@ -261,7 +265,7 @@ func FormatTitle(title string) string {
 	// These shells don't support setting the console title.
 	case shell.ELVISH, shell.XONSH:
 		return ""
-	case shell.BASH, shell.ZSH:
+	case shell.BASH, shell.ZSH, shell.YASH:
 		title = trimAnsi(title)
 
 		sb := text.NewBuilder()
@@ -319,8 +323,14 @@ func LineBreak() string {
 	return cr + lf
 }
 
+func progressSupported() bool {
+	return slices.ContainsFunc(progressTerminals, func(program string) bool {
+		return strings.EqualFold(program, Program)
+	})
+}
+
 func StartProgress() string {
-	if Program != WindowsTerminal {
+	if !progressSupported() {
 		return ""
 	}
 
@@ -328,7 +338,7 @@ func StartProgress() string {
 }
 
 func SetProgress(percentage int) string {
-	if Program != WindowsTerminal {
+	if !progressSupported() {
 		return ""
 	}
 
@@ -336,7 +346,7 @@ func SetProgress(percentage int) string {
 }
 
 func StopProgress() string {
-	if Program != WindowsTerminal {
+	if !progressSupported() {
 		return ""
 	}
 

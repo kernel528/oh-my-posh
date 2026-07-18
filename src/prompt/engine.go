@@ -38,15 +38,16 @@ type Engine struct {
 }
 
 const (
-	PRIMARY   = "primary"
-	TRANSIENT = "transient"
-	DEBUG     = "debug"
-	SECONDARY = "secondary"
-	RIGHT     = "right"
-	TOOLTIP   = "tooltip"
-	VALID     = "valid"
-	ERROR     = "error"
-	PREVIEW   = "preview"
+	PRIMARY         = "primary"
+	TRANSIENT       = "transient"
+	TRANSIENT_RIGHT = "transient-right"
+	DEBUG           = "debug"
+	SECONDARY       = "secondary"
+	RIGHT           = "right"
+	TOOLTIP         = "tooltip"
+	VALID           = "valid"
+	ERROR           = "error"
+	PREVIEW         = "preview"
 )
 
 func (e *Engine) write(txt string) {
@@ -165,6 +166,11 @@ func (e *Engine) isIterm() bool {
 func (e *Engine) shouldFill(filler string, padLength int) (string, bool) {
 	if filler == "" {
 		log.Debug("no filler specified")
+		return "", false
+	}
+
+	if padLength < 0 {
+		log.Debug("padding length is negative")
 		return "", false
 	}
 
@@ -295,6 +301,10 @@ func (e *Engine) writeBlock(block *config.Block, blockText string, length int, c
 
 // renderBlockFromCache re-renders a block using existing segment data without re-execution
 func (e *Engine) renderBlockFromCache(block *config.Block, cancelNewline bool) bool {
+	if block.RestartCycle {
+		cycle = &e.Config.Cycle
+	}
+
 	// Re-render all segments in the block
 	for segmentIndex, segment := range block.Segments {
 		// Allow pending segments to render (they show "..." text)

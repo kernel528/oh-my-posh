@@ -37,8 +37,8 @@ _omp_serve_pid=${_omp_serve_pid:-0}
 _omp_serve_cycle=0
 _omp_serve_failures=0
 
-# set secondary prompt
-_omp_secondary_prompt=$($_omp_executable print secondary --shell=zsh)
+# set secondary prompt (also exports POSH_MULTILINE_KEEPPROMPT)
+eval "$($_omp_executable print secondary --shell=zsh --eval)"
 
 function _omp_set_cursor_position() {
   # not supported in Midnight Commander
@@ -165,6 +165,13 @@ function _omp_serve_stop() {
 function _omp_serve_start() {
   _omp_serve_stop
 
+  # With job control active, an interactive zsh announces the coproc on the
+  # terminal like any background job ("[1] 12345"). Disabling MONITOR for the
+  # spawn suppresses the notice; as a side effect the daemon starts with
+  # SIGINT/SIGQUIT ignored (POSIX no-job-control semantics), so Ctrl+C at the
+  # prompt cannot take it down.
+  setopt localoptions no_monitor
+
   # The daemon's stderr must never reach the terminal (a Go panic would
   # corrupt the display).
   coproc "$_omp_executable" serve --shell=zsh 2>/dev/null
@@ -172,8 +179,12 @@ function _omp_serve_start() {
   _omp_serve_pid=$!
 
   # Duplicate both directions to session fds: the duplicates survive a later
-  # `coproc` (ours or the user's) replacing the coproc slot.
-  exec {_omp_serve_fd_out}<&p {_omp_serve_fd_in}>&p 2>/dev/null
+  # `coproc` (ours or the user's) replacing the coproc slot. The stderr
+  # redirect (suppressing "no coprocess" when the daemon failed to start) must
+  # be scoped to a block: on a redirection-only `exec`, zsh applies every
+  # listed redirection to the shell permanently, which would silence the
+  # session's stderr for good.
+  { exec {_omp_serve_fd_out}<&p {_omp_serve_fd_in}>&p } 2>/dev/null
   if [[ $_omp_serve_fd_in -lt 0 || $_omp_serve_fd_out -lt 0 ]]; then
     _omp_serve_stop
     return 1
@@ -378,9 +389,34 @@ function _omp_milliseconds() {
   _omp_millis=$($_omp_executable get millis)
 }
 
+# percent-encode $1 into REPLY, byte-wise, keeping RFC 3986 unreserved characters literal
+function _omp_urlencode() {
+  emulate -L zsh
+  setopt no_multibyte
+  local str=$1 ch
+  local -i i
+  REPLY=''
+  for (( i = 1; i <= ${#str}; i++ )); do
+    ch=$str[i]
+    if [[ $ch == [A-Za-z0-9._~-] ]]; then
+      REPLY+=$ch
+      continue
+    fi
+    printf -v ch '%%%02X' "'$ch"
+    REPLY+=$ch
+  done
+}
+
 function _omp_preexec() {
   if [[ $_omp_ftcs_marks == 1 ]]; then
-    printf '\033]133;C\007'
+    if [[ -n $1 ]]; then
+      # advertise the command line via kitty's cmdline_url= extension
+      local REPLY
+      _omp_urlencode "$1"
+      printf '\033]133;C;cmdline_url=%s\007' "$REPLY"
+    else
+      printf '\033]133;C\007'
+    fi
   fi
 
   _omp_milliseconds
@@ -533,13 +569,90 @@ function _omp_restore_rprompt() {
   zle .reset-prompt
 }
 
+# Returns 0 when the current buffer is a complete command, 1 when more input
+# is expected (used to keep the primary prompt while a multi-line command is
+# still being typed).
+function _omp_is_buffer_complete() {
+  local buf=$PREBUFFER$BUFFER
+
+  # 1. Syntax check. The buffer travels over a pipe rather than a here-document,
+  # so no delimiter word can collide with whatever the user happens to type.
+  if ! print -r -- "$buf" | zsh -n 2>/dev/null; then
+    return 1
+  fi
+
+  # 2. An unterminated here-document parses cleanly, because the parser simply
+  # ends the body at EOF. Step 1 therefore cannot see one. Re-parse with `;;`
+  # appended: outside a case branch that is a syntax error, but an open
+  # here-document swallows it as body text. A clean parse means the body was
+  # never closed. The `<<` test only skips the extra parse when no here-document
+  # can possibly be open.
+  if [[ $buf == *'<<'* ]] && print -r -- "$buf"$'\n;;' | zsh -n 2>/dev/null; then
+    return 1
+  fi
+
+  # 3. The SHORT_LOOPS option (on by default) makes `zsh -n` accept a bare loop
+  # header as a complete empty loop - `for i in 1 2`, `while true`, or the
+  # `for i in 1 2 do;` form - even though the line editor keeps waiting for the
+  # body. Re-parse with an explicit `do : done` appended and SHORT_LOOPS off:
+  # an open `for`/`while`/`until`/`select`/`repeat` header absorbs it into a
+  # valid loop, while every genuinely complete command - including the
+  # `for x (...) cmd` and `repeat n cmd` short forms - orphans the `do` into a
+  # syntax error. The keyword test keeps the extra parse off the common path.
+  if [[ $buf == *(for|while|until|select|repeat)* ]] && \
+     print -r -- "$buf"$'\ndo\n:\ndone' | zsh +o shortloops -n 2>/dev/null; then
+    return 1
+  fi
+
+  # 4. An odd number of trailing backslashes escapes the newline that follows the
+  # buffer, which parses as a line continuation rather than an incomplete command.
+  local trailing=${buf##*[^\\]}
+  (( ${#trailing} % 2 )) && return 1
+
+  return 0
+}
+
 function _omp_zle-line-init() {
   [[ $CONTEXT == start ]] || return 0
 
+  # zsh-vi-mode wraps this widget, so its own line-init runs after ours - that
+  # is, after .recursive-edit below has consumed the entire editing session.
+  # Run it up front to align the keymap and ZVM's mode bookkeeping before
+  # editing starts. See https://github.com/JanDeDobbeleer/oh-my-posh/issues/5992
+  # The empty rawfunc shadows the like-named local in zvm_widget_wrapper:
+  # zvm_reset_prompt resolves rawfunc dynamically and would otherwise re-enter
+  # this widget through it.
+  local rawfunc=
+  if (( $+functions[zvm_zle-line-init] )) && [[ $ZVM_INIT_DONE == true ]]; then
+    zvm_zle-line-init
+  fi
+
   # Start regular line editor.
   (( $+zle_bracketed_paste )) && print -r -n - $zle_bracketed_paste[1]
-  zle .recursive-edit
-  local -i ret=$?
+
+  local -i ret=0
+  if [[ $POSH_MULTILINE_KEEPPROMPT == "true" ]]; then
+    # Keep the full primary prompt while a multi-line command is still being
+    # typed: re-enter the editor until the buffer is a complete command.
+    while true; do
+      zle .recursive-edit
+      ret=$?
+
+      if ((ret)) || _omp_is_buffer_complete; then
+        break
+      fi
+
+      # Nothing may be prefixed to the continuation line. BUFFER is the command
+      # itself, so anything added here is executed. Even pure whitespace breaks a
+      # here-document, whose terminator only matches at the very start of a line.
+      BUFFER+=$'\n'
+      CURSOR=$#BUFFER
+    done
+  else
+    zle .recursive-edit
+    ret=$?
+  fi
+
   (( $+zle_bracketed_paste )) && print -r -n - $zle_bracketed_paste[2]
 
   # We need this workaround because when the `filler` is set,
@@ -555,7 +668,12 @@ function _omp_zle-line-init() {
   _omp_cleanup_stream
   _omp_serve_abort
 
-  if [[ -n $_omp_transient_prompt ]]; then
+  if ((ret)); then
+    # interrupted (e.g. Ctrl-C): a pre-rendered transient prompt was built
+    # before the interrupt and can't carry .Interrupted, so always re-render
+    # through the CLI with the flag set
+    eval "$(_omp_get_prompt transient --eval $terminal_width_option --interrupted)"
+  elif [[ -n $_omp_transient_prompt ]]; then
     # rendered ahead of time by the streaming process (one column narrower,
     # mirroring the empty-buffer workaround above), saves a CLI call
     PS1=$_omp_transient_prompt
@@ -638,6 +756,15 @@ function _omp_enable_vimode() {
   export POSH_VI_MODE=${POSH_VI_MODE:-main}
   _omp_create_widget zle-keymap-select _omp_render_vimode
 }
+
+# This can be called by the user whenever re-rendering is required.
+function omp_repaint_prompt() {
+  eval "$(_omp_get_prompt primary --eval)"
+  zle .reset-prompt 2>/dev/null
+}
+
+# Allow direct key binding: bindkey '^B' omp_repaint_prompt
+zle -N omp_repaint_prompt
 
 # legacy functions
 function enable_poshtransientprompt() {}

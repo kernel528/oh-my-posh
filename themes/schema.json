@@ -28,6 +28,19 @@
       "title": "Palette reference",
       "description": "https://ohmyposh.dev/docs/configuration/colors#palette"
     },
+    "palette_color": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/color"
+        },
+        {
+          "type": "string",
+          "pattern": "\\{\\{.*\\}\\}",
+          "title": "Color template",
+          "description": "https://ohmyposh.dev/docs/configuration/colors#palette"
+        }
+      ]
+    },
     "templates": {
       "type": "array",
       "title": "An array of templates",
@@ -159,6 +172,15 @@
           "type": "array",
           "title": "Extensions",
           "description": "The extensions to look for when determining if the current directory is a project",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "project_files": {
+          "type": "array",
+          "title": "Project Files",
+          "description": "The files to look for in a parent directory when determining if the current directory is part of a project",
           "default": [],
           "items": {
             "type": "string"
@@ -344,6 +366,12 @@
           "description": "https://ohmyposh.dev/docs/configuration/block#force",
           "default": false
         },
+        "restart_cycle": {
+          "type": "boolean",
+          "title": "Restart cycle",
+          "description": "https://ohmyposh.dev/docs/configuration/block#restart-cycle",
+          "default": false
+        },
         "index": {
           "type": "integer",
           "title": "Index",
@@ -429,6 +457,7 @@
             "npm",
             "nx",
             "ocaml",
+            "orthodoxcal",
             "os",
             "owm",
             "path",
@@ -466,6 +495,7 @@
             "todoist",
             "ui5tooling",
             "umbraco",
+            "uno",
             "unity",
             "upgrade",
             "v",
@@ -611,6 +641,12 @@
           "title": "Placeholder text",
           "description": "Text to display while the segment is loading in streaming mode. See https://ohmyposh.dev/docs/experimental/streaming",
           "default": "..."
+        },
+        "fallback_template": {
+          "type": "string",
+          "title": "Fallback template text",
+          "description": "https://ohmyposh.dev/docs/configuration/templates",
+          "default": ""
         }
       },
       "allOf": [
@@ -2634,6 +2670,82 @@
           "if": {
             "properties": {
               "type": {
+                "const": "language"
+              }
+            }
+          },
+          "then": {
+            "title": "Language Segment",
+            "description": "https://ohmyposh.dev/docs/segments/languages/language",
+            "properties": {
+              "options": {
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/language_options"
+                  }
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "title": "Name",
+                    "description": "Unique identifier for the segment, used as its version cache key",
+                    "default": ""
+                  },
+                  "tools": {
+                    "type": "array",
+                    "title": "Tools",
+                    "description": "The executables that can report this language's version, tried in order until one succeeds",
+                    "default": [],
+                    "items": {
+                      "type": "object",
+                      "title": "Tool",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "title": "Name",
+                          "description": "Unique identifier for this tool"
+                        },
+                        "executable": {
+                          "type": "string",
+                          "title": "Executable",
+                          "description": "The executable to run to fetch the version"
+                        },
+                        "args": {
+                          "type": "array",
+                          "title": "Arguments",
+                          "description": "The arguments to pass to the executable",
+                          "default": [],
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "regex": {
+                          "type": "string",
+                          "title": "Regex",
+                          "description": "The regex used to parse the version from the executable's output; must contain a named `version` capture group, and may include `major`, `minor`, `patch`, `prerelease` and `buildmetadata` groups"
+                        },
+                        "version_url_template": {
+                          "type": "string",
+                          "title": "Version Url Template",
+                          "description": "Template that creates the URL of the version info / release notes for this tool"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "executable",
+                        "regex"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "lastfm"
               }
             }
@@ -3464,6 +3576,39 @@
           "if": {
             "properties": {
               "type": {
+                "const": "orthodoxcal"
+              }
+            }
+          },
+          "then": {
+            "title": "Orthodox Calendar Segment",
+            "description": "https://ohmyposh.dev/docs/segments/health/orthodoxcal",
+            "properties": {
+              "options": {
+                "properties": {
+                  "calendar": {
+                    "type": "string",
+                    "title": "Calendar Type",
+                    "description": "Calendar type: gregorian or julian",
+                    "enum": [
+                      "gregorian",
+                      "julian"
+                    ],
+                    "default": "gregorian"
+                  },
+                  "http_timeout": {
+                    "$ref": "#/definitions/http_timeout"
+                  }
+                },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "owm"
               }
             }
@@ -3581,6 +3726,12 @@
                     "title": "Enable the Mapped Locations feature",
                     "description": "Replace known locations in the path with the replacements before applying the style.",
                     "default": true
+                  },
+                  "mapped_locations_regex_expand": {
+                    "type": "boolean",
+                    "title": "Expand regex capture groups in Mapped Locations",
+                    "description": "When a mapped_locations key uses the re: prefix, expand $1, ${name}, etc. in the replacement value using the full regex match instead of only substituting the first capture group.",
+                    "default": false
                   },
                   "max_depth": {
                     "type": "integer",
@@ -3898,6 +4049,15 @@
                     "title": "Always Enabled",
                     "description": "Always show the segment",
                     "default": false
+                  },
+                  "priority": {
+                    "type": "array",
+                    "title": "Priority",
+                    "description": "Reorder the project types to check first, using the .Type values (e.g. node, php, cargo)",
+                    "default": [],
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "resolve_target_from_solution": {
                     "type": "boolean",
@@ -4725,7 +4885,7 @@
                   "fetch_version": {
                     "type": "boolean",
                     "title": "Fetch Version",
-                    "description": "Fetch the version number",
+                    "description": "Fetch the version number from tenv (TFENV_TERRAFORM_VERSION / TOFUENV_TOFU_VERSION or .terraform-version / .opentofu-version), versions.tf, main.tf or terraform.tfstate",
                     "default": false
                   }
                 },
@@ -4846,6 +5006,19 @@
           "then": {
             "title": "Umbraco Segment",
             "description": "https://ohmyposh.dev/docs/segments/cli/umbraco"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "uno"
+              }
+            }
+          },
+          "then": {
+            "title": "Uno Platform Segment",
+            "description": "https://ohmyposh.dev/docs/segments/cli/uno"
           }
         },
         {
@@ -5389,6 +5562,11 @@
               "title": "Newline",
               "description": "Add a newline before the prompt",
               "default": false
+            },
+            "right_template": {
+              "type": "string",
+              "title": "Right Template",
+              "description": "The right-aligned template to render next to the transient prompt, supported in zsh and PowerShell only"
             }
           }
         }
@@ -5405,9 +5583,23 @@
       "description": "https://ohmyposh.dev/docs/configuration/line-error"
     },
     "secondary_prompt": {
-      "$ref": "#/definitions/extra_prompt",
       "title": "Secondary Prompt Setting",
-      "description": "https://ohmyposh.dev/docs/configuration/secondary-prompt"
+      "description": "https://ohmyposh.dev/docs/configuration/secondary-prompt",
+      "allOf": [
+        {
+          "$ref": "#/definitions/extra_prompt"
+        },
+        {
+          "properties": {
+            "multiline_keepprompt": {
+              "type": "boolean",
+              "title": "Multiline Keep Prompt",
+              "description": "Treat multi-line commands as a single block to support transient prompts correctly",
+              "default": false
+            }
+          }
+        }
+      ]
     },
     "debug_prompt": {
       "$ref": "#/definitions/extra_prompt",
@@ -5421,7 +5613,7 @@
       "default": {},
       "patternProperties": {
         ".*": {
-          "$ref": "#/definitions/color"
+          "$ref": "#/definitions/palette_color"
         }
       }
     },
@@ -5476,6 +5668,21 @@
           "current_dir",
           "remote_host"
         ]
+      }
+    },
+    "terminal_features": {
+      "type": "object",
+      "title": "Terminal features configuration",
+      "description": "https://ohmyposh.dev/docs/configuration/general#terminal-features",
+      "properties": {
+        "progress": {
+          "type": "array",
+          "title": "Progress terminals",
+          "description": "Terminal programs supporting OSC 9;4 progress sequences, matched case-insensitively against $TERM_PROGRAM. Defaults to Windows Terminal",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "var": {

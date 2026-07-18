@@ -89,6 +89,7 @@ export default {
             "segments/cli/terraform",
             "segments/cli/ui5tooling",
             "segments/cli/umbraco",
+            "segments/cli/uno",
             "segments/cli/unity",
             "segments/cli/xmake",
             "segments/cli/yarn",
@@ -118,6 +119,7 @@ export default {
           collapsed: true,
           items: [
             "segments/health/nightscout",
+            "segments/health/orthodoxcal",
             "segments/health/ramadan",
             "segments/health/strava",
             "segments/health/withings",
@@ -139,6 +141,7 @@ export default {
             "segments/languages/java",
             "segments/languages/julia",
             "segments/languages/kotlin",
+            "segments/languages/language",
             "segments/languages/lua",
             "segments/languages/mojo",
             "segments/languages/nim",
