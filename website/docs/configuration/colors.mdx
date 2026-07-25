@@ -30,6 +30,105 @@ Oh My Posh supports multiple different color references, being:
 - The `parentBackground` keyword which can be used to inherit the previous active segment's background color.
 - The `accent` keyword which references the OS accent color (Windows and macOS only).
 
+## Gradients
+
+Anywhere a **Standard color** is expected, you can instead use a `linear-gradient` with two or
+more comma-separated stops:
+
+<Config
+  data={{
+    type: "text",
+    style: "plain",
+    foreground: "linear-gradient(#FF0000, #0000FF)",
+  }}
+/>
+
+The stops are spread evenly across the segment's visible text and interpolated per character cell.
+Each stop can be a hex color or a [Palette reference][palette] (`p:name`), so gradients work with
+`palette` and `palettes` the same way **Standard colors** do. This applies to `foreground`,
+`background`, `foreground_templates`, `background_templates`, Palette entries, and `cycle` colors.
+
+Powerline separators, diamond caps, and the `parentBackground`/`parentForeground` keywords
+automatically pick up the matching edge of the gradient, so a segment next to a gradient still
+connects with the right color.
+
+### Auto-shade from a single color
+
+`dark-gradient(#3465A4)` and `light-gradient(#3465A4)` take a single color and run from that
+exact color to a darker or lighter shade of it, letting one configured color produce a gradient
+effect on a segment too narrow for a real two-stop gradient to render as anything but a solid
+color, see [Stops and segment width](#stops-and-segment-width).
+
+<Config
+  data={{
+    type: "text",
+    style: "plain",
+    background: "dark-gradient(#3465A4)",
+  }}
+/>
+
+The first cell always renders the exact configured color; the last renders the shade. Everything
+in between interpolates the same way a two-stop gradient does, so a wide segment shows a gentler
+ramp and a narrow one a coarser one. A single-cell segment renders the configured color unmodified.
+Each takes exactly one color; `dark-gradient`/`light-gradient` with more than one stop is invalid,
+same as a `linear-gradient` with fewer than two.
+
+### Supported stops
+
+A stop must resolve to a hex color before it can be interpolated:
+
+| Stop                                                               | Supported |
+| ------------------------------------------------------------------ | --------- |
+| Hex color (`#CB4B16`, `#F0A`)                                      | yes       |
+| [Palette reference][palette] to a hex color (`p:blue`)             | yes       |
+| `parentBackground`, `parentForeground`, `background`, `foreground` | yes       |
+| `accent` (Windows and macOS only)                                  | yes       |
+| ANSI color name (`red`, `lightBlue`)                               | no        |
+| 256 color palette number (`146`)                                   | no        |
+| `transparent`                                                      | no        |
+
+Keyword stops resolve against the surrounding segments at render time and must land on a hex
+color; when the previous segment uses a gradient itself, `parentBackground` picks up its last
+stop, so `linear-gradient(parentBackground, p:yellow)` connects seamlessly to it. On platforms
+where the OS accent color is unavailable, an `accent` stop is invalid and the gradient falls
+back like any other invalid stop.
+
+A `background` or `foreground` keyword in a [color override](#color-overrides) inside a gradient
+segment resolves to the gradient's color at that position in the text: a leading
+`<background,transparent>` cap picks up the first stop, a trailing one the color where the
+gradient ends, so template caps stay seamless without hardcoding edge colors.
+
+A `linear-gradient` that resolves to fewer than two supported colors — including a `linear-gradient`
+written with only one stop — renders as a solid color: the last stop goes through the regular color
+pipeline, so `linear-gradient(red, blue)` renders solid blue rather than failing, and
+`linear-gradient(#3465A4)` renders solid `#3465A4` rather than shading — matching the color its
+separators and width-collapsed form already use. Rejected stops are reported in `oh-my-posh debug`
+output. Use [`dark-gradient`/`light-gradient`](#auto-shade-from-a-single-color) for a one-color
+gradient effect instead.
+
+### Stops and segment width
+
+The gradient always starts and ends exactly on the configured colors: the first stop lands on the
+first visible cell, the last stop on the last. Everything in between is interpolated, so a narrow
+segment simply shows a coarser gradient. A gradient needs at least two visible cells per stop to
+render per cell; narrower segments render the last stop as a solid color across the whole segment,
+including its caps and separators, rather than a coarse blend. Streaming placeholders are
+exempt: a pending segment's `...` placeholder previews the gradient per cell regardless of its
+width. Rendering cost is negligible; the
+only overhead is the per-cell color escape, which grows the prompt string by a few bytes per
+character.
+
+:::caution
+
+- Gradients aren't supported on segments with `interactive: true`; shell-expanded text throws off
+  the cell count the gradient interpolates across.
+- A gradient can't span multiple segments; each segment's gradient is self-contained.
+- Only the stop-list syntax is supported. Angle or direction keywords (for example `to right`) are
+  reserved but not implemented.
+- Terminals without truecolor support fall back to a banded 256-color approximation.
+
+:::
+
 ## Color templates
 
 Array of string [templates][templates] to define the color based on the current context.
@@ -317,3 +416,4 @@ cycle always gets precedence over everything else.
 [segment]: /docs/configuration/segment
 [sprig]: https://masterminds.github.io/sprig/
 [templates]: templates.mdx
+[palette]: #palette

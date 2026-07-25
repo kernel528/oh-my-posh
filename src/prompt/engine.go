@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"slices"
 	"strings"
 	"sync"
 
@@ -25,16 +26,27 @@ type Engine struct {
 	Config                *config.Config
 	activeSegment         *config.Segment
 	previousActiveSegment *config.Segment
-	pendingSegments       sync.Map
-	rprompt               string
-	Overflow              config.Overflow
-	prompt                strings.Builder
-	allBlocks             []*config.Block
-	currentLineLength     int
-	Padding               int
-	rpromptLength         int
-	Plain                 bool
-	forceRender           bool
+	// blockTailColors is a snapshot of terminal.ParentColors captured just
+	// before previousActiveSegment resets to nil at the end of a block. A
+	// block's own Filler (see shouldFill) renders after terminal.String()
+	// has already cleared the parent stack for the next block, so a filler
+	// template using <parentBackground>/<parentForeground> needs this to
+	// resolve against the block it is padding rather than an empty stack.
+	// A full copy, not just the tail entry: the tail segment's own stored
+	// color can itself be an unresolved parentBackground/parentForeground
+	// keyword, and resolving that requires walking the rest of the chain
+	// the same way the block's own last segment did.
+	blockTailColors   []*color.Set
+	pendingSegments   sync.Map
+	rprompt           string
+	Overflow          config.Overflow
+	prompt            strings.Builder
+	allBlocks         []*config.Block
+	currentLineLength int
+	Padding           int
+	rpromptLength     int
+	Plain             bool
+	forceRender       bool
 }
 
 const (
@@ -117,7 +129,7 @@ func (e *Engine) pwd() {
 	}
 
 	// Allow template logic to define when to enable the PWD (when supported)
-	pwdType, err := template.Render(e.Config.PWD, nil)
+	pwdType, err := template.RenderTrusted(e.Config.PWD, nil)
 	if err != nil || pwdType == "" {
 		return
 	}
@@ -181,12 +193,20 @@ func (e *Engine) shouldFill(filler string, padLength int) (string, bool) {
 	}()
 
 	var err error
-	if filler, err = template.Render(filler, e); err != nil {
+	if filler, err = template.RenderTrusted(filler, e); err != nil {
 		return "", false
 	}
 
 	// allow for easy color overrides and templates
 	terminal.SetColors("default", "default")
+
+	// the block's own segments already reset the parent stack when their
+	// terminal.String() call produced blockText - reseed the chain a
+	// <parentBackground>/<parentForeground> anchor in the filler needs.
+	if len(e.blockTailColors) != 0 {
+		terminal.ParentColors = append(terminal.ParentColors, e.blockTailColors...)
+	}
+
 	terminal.Write("", "", filler)
 	filler, lenFiller := terminal.String()
 	if lenFiller == 0 {
@@ -202,7 +222,7 @@ func (e *Engine) shouldFill(filler string, padLength int) (string, bool) {
 }
 
 func (e *Engine) getTitleTemplateText() string {
-	if txt, err := template.Render(e.Config.ConsoleTitleTemplate, nil); err == nil {
+	if txt, err := template.RenderTrusted(e.Config.ConsoleTitleTemplate, nil); err == nil {
 		return txt
 	}
 
@@ -337,6 +357,7 @@ func (e *Engine) renderBlockFromCache(block *config.Block, cancelNewline bool) b
 
 	e.writeSeparator(true)
 	e.activeSegment = nil
+	e.captureBlockTailColors()
 	e.previousActiveSegment = nil
 
 	blockText, length := terminal.String()
@@ -366,10 +387,165 @@ func (e *Engine) applyPowerShellBleedPatch() {
 	e.write(terminal.ClearAfter())
 }
 
+// minGradientCellsPerStop is the minimum number of visible cells a gradient stop needs to
+// render as a smooth blend rather than a discrete color block; see Amendment 3 in the
+// gradient spec. Below cells < minGradientCellsPerStop*stops, collapseGradient replaces the
+// whole channel with the gradient's last stop.
+const minGradientCellsPerStop = 2
+
 func (e *Engine) setActiveSegment(segment *config.Segment) {
 	e.activeSegment = segment
 	terminal.Interactive = segment.Interactive
-	terminal.SetColors(segment.ResolveBackground(), segment.ResolveForeground())
+
+	background := resolvePaletteReference(segment.ResolveBackground())
+	foreground := resolvePaletteReference(segment.ResolveForeground())
+
+	// palette-resolved values are written back to the segment's resolved-color cache
+	// so a palette entry holding a gradient is visible to every downstream consumer
+	// (separators, diamonds, parent color references), not just this render call.
+	if background != segment.ResolveBackground() {
+		segment.CollapseBackground(background)
+	}
+
+	if foreground != segment.ResolveForeground() {
+		segment.CollapseForeground(foreground)
+	}
+
+	// the collapse decision is made once per segment, before anything renders, so every
+	// consumer of the segment's resolved colors (this Write call, separators, diamonds,
+	// parent color references) agrees on the same solid color; see collapseGradient.
+	// Pending placeholders are exempt: they are transient and should preview the
+	// segment's gradient rather than flash a collapsed solid color mid-stream.
+	if !segment.Pending && (background.IsGradient() || foreground.IsGradient()) {
+		cells := terminal.VisibleCells(segment.Text())
+
+		if collapsed, ok := collapseGradient(background, cells); ok {
+			background = collapsed
+			segment.CollapseBackground(background)
+		}
+
+		if collapsed, ok := collapseGradient(foreground, cells); ok {
+			foreground = collapsed
+			segment.CollapseForeground(foreground)
+		}
+	}
+
+	terminal.SetColors(background, foreground)
+}
+
+// resolvePaletteReference expands a palette reference (p:name) so a palette entry
+// holding a gradient is visible to the engine's gradient handling; without this,
+// IsGradient/GradientLast run on the literal "p:name" string and every gradient
+// rule is silently skipped for palette-referenced gradients.
+func resolvePaletteReference(c color.Ansi) color.Ansi {
+	if terminal.Colors == nil {
+		return c
+	}
+
+	resolved, err := terminal.Colors.Resolve(c)
+	if err != nil {
+		return c
+	}
+
+	if !resolved.IsGradient() {
+		return resolved
+	}
+
+	return resolveGradientStopReferences(resolved)
+}
+
+// resolveGradientStopReferences expands a palette reference (p:name) used as an
+// individual STOP inside a gradient, e.g. dark-gradient(p:teal): the whole-string
+// resolve above only catches a bare "p:name" that itself resolves to a gradient, so a
+// palette-referenced stop reaches GradientLast, separators, diamond caps, and the
+// parentBackground/parentForeground chain in keywords.go as a raw, unresolvable
+// "p:name" string — none of those have resolver access to expand it themselves. A
+// keyword stop (parentBackground, foreground, accent, ...) or literal hex stop is not
+// a palette key and passes through Resolve unchanged, so this only ever rewrites actual
+// palette references. A stop that resolves to a gradient itself (a palette entry holding
+// a gradient) is left as its raw "p:name" text: GradientStops already rejects a nested
+// gradient, so it must degrade through the normal per-stop resolve-and-skip path in
+// GradientCells instead, same as before this function existed.
+func resolveGradientStopReferences(c color.Ansi) color.Ansi {
+	stops := c.GradientStops()
+	if len(stops) == 0 {
+		return c
+	}
+
+	resolvedStops := make([]color.Ansi, len(stops))
+	changed := false
+
+	for i, stop := range stops {
+		resolved, err := terminal.Colors.Resolve(stop)
+		if err != nil || resolved.IsGradient() {
+			resolvedStops[i] = stop
+			continue
+		}
+
+		if resolved != stop {
+			changed = true
+		}
+
+		resolvedStops[i] = resolved
+	}
+
+	if !changed {
+		return c
+	}
+
+	// WithGradientStops preserves c's own prefix (linear-gradient, dark-gradient, or
+	// light-gradient), so a resolved dark-gradient(p:teal) stays a dark-gradient with
+	// its darken semantics, not a plain linear-gradient.
+	return c.WithGradientStops(resolvedStops)
+}
+
+// collapseGradient reports whether c must collapse to a single solid color because the
+// segment has fewer than minGradientCellsPerStop visible cells per stop, returning that
+// color (the gradient's last stop) when so. A non-gradient value, or a syntactically invalid
+// gradient (nil GradientStops), is left untouched: the writer's existing per-call fallback
+// handles those.
+func collapseGradient(c color.Ansi, cells int) (color.Ansi, bool) {
+	if !c.IsGradient() {
+		return c, false
+	}
+
+	stops := c.GradientStops()
+	if len(stops) < 2 {
+		return c, false
+	}
+
+	if cells >= minGradientCellsPerStop*len(stops) {
+		return c, false
+	}
+
+	return stops[len(stops)-1], true
+}
+
+// backgroundEdge collapses a segment's background gradient to its last stop,
+// resolving a keyword stop (foreground, background) against the SAME segment's
+// colors so edge consumers never leak a keyword into the wrong context. Uses the
+// segment's own visible cell count so a dark-gradient/light-gradient's edge matches
+// the actual last cell GradientCells renders it as (see GradientLastForCells).
+func backgroundEdge(segment *config.Segment) color.Ansi {
+	cells := terminal.VisibleCells(segment.Text())
+
+	background := resolvePaletteReference(segment.ResolveBackground())
+
+	stop := background.GradientLastForCells(cells)
+
+	switch stop { //nolint:exhaustive
+	case color.Foreground:
+		stop = resolvePaletteReference(segment.ResolveForeground()).GradientLastForCells(cells)
+	case color.Background:
+		// self-reference has no resolvable edge
+		return color.Transparent
+	}
+
+	if stop == color.Foreground || stop == color.Background {
+		return color.Transparent
+	}
+
+	return stop
 }
 
 func (e *Engine) renderActiveSegment() {
@@ -382,7 +558,8 @@ func (e *Engine) renderActiveSegment() {
 		background := color.Transparent
 
 		if e.previousActiveSegment != nil && e.previousActiveSegment.HasEmptyDiamondAtEnd() {
-			background = e.previousActiveSegment.ResolveBackground()
+			// this is the previous segment's right edge; a gradient must show its last stop.
+			background = backgroundEdge(e.previousActiveSegment)
 		}
 
 		terminal.Write(background, color.Background, e.activeSegment.LeadingDiamond)
@@ -399,6 +576,23 @@ func (e *Engine) renderActiveSegment() {
 	terminal.SetParentColors(e.previousActiveSegment.ResolveBackground(), e.previousActiveSegment.ResolveForeground())
 }
 
+// captureBlockTailColors snapshots terminal.ParentColors into blockTailColors
+// just before previousActiveSegment resets to nil, so a later shouldFill call
+// for this same block's Filler can still resolve
+// <parentBackground>/<parentForeground> after terminal.String() has already
+// cleared the parent stack for the next block. A full copy of the chain, not
+// just the tail entry: the tail segment's own stored color can itself be an
+// unresolved parentBackground/parentForeground keyword, which needs the rest
+// of the chain to resolve the same way it did for the block's own segments.
+func (e *Engine) captureBlockTailColors() {
+	if e.previousActiveSegment == nil {
+		e.blockTailColors = nil
+		return
+	}
+
+	e.blockTailColors = slices.Clone(terminal.ParentColors)
+}
+
 func (e *Engine) writeSeparator(final bool) {
 	if e.activeSegment == nil {
 		return
@@ -406,7 +600,14 @@ func (e *Engine) writeSeparator(final bool) {
 
 	isCurrentDiamond := e.activeSegment.ResolveStyle() == config.Diamond
 	if final && isCurrentDiamond {
-		terminal.Write(color.Transparent, color.Background, e.activeSegment.TrailingDiamond)
+		// the trailing diamond sits at the segment's right edge; a gradient
+		// background must render as its last stop, not the writer's cells==1 default.
+		diamondColor := color.Background
+		if resolvePaletteReference(e.activeSegment.ResolveBackground()).IsGradient() {
+			diamondColor = backgroundEdge(e.activeSegment)
+		}
+
+		terminal.Write(color.Transparent, diamondColor, e.resolveTrailingDiamond())
 		return
 	}
 
@@ -481,24 +682,58 @@ func (e *Engine) writeSeparator(final bool) {
 	terminal.Write(bgColor, e.getPowerlineColor(), symbol)
 }
 
+// getPowerlineColor resolves the separator symbol's color, which always sits at the
+// previous segment's right edge; a gradient background must collapse to its last stop,
+// resolved against the previous segment's own context (see backgroundEdge).
 func (e *Engine) getPowerlineColor() color.Ansi {
 	if e.previousActiveSegment == nil {
 		return color.Transparent
 	}
 
 	if e.previousActiveSegment.ResolveStyle() == config.Diamond && e.previousActiveSegment.TrailingDiamond == "" {
-		return e.previousActiveSegment.ResolveBackground()
+		return backgroundEdge(e.previousActiveSegment)
 	}
 
 	if e.activeSegment.ResolveStyle() == config.Diamond && e.activeSegment.LeadingDiamond == "" {
-		return e.previousActiveSegment.ResolveBackground()
+		return backgroundEdge(e.previousActiveSegment)
 	}
 
 	if !e.previousActiveSegment.IsPowerline() {
 		return color.Transparent
 	}
 
-	return e.previousActiveSegment.ResolveBackground()
+	return backgroundEdge(e.previousActiveSegment)
+}
+
+// resolveTrailingDiamond rewrites a `background` keyword inside the active segment's
+// trailing diamond template to the gradient's resolved last stop. The diamond renders
+// in its own Write with no gradient cell context, so the keyword would otherwise
+// collapse to the FIRST stop — a visible seam at the segment's right edge.
+func (e *Engine) resolveTrailingDiamond() string {
+	diamond := e.activeSegment.TrailingDiamond
+
+	if !strings.Contains(diamond, string(color.Background)) {
+		return diamond
+	}
+
+	if !resolvePaletteReference(e.activeSegment.ResolveBackground()).IsGradient() {
+		return diamond
+	}
+
+	match := regex.FindNamedRegexMatch(terminal.AnchorRegex, diamond)
+	if len(match) == 0 {
+		return diamond
+	}
+
+	edge := backgroundEdge(e.activeSegment)
+	if edge.IsClear() {
+		return diamond
+	}
+
+	anchor := match[terminal.ANCHOR]
+	adjusted := strings.ReplaceAll(anchor, string(color.Background), edge.String())
+
+	return strings.Replace(diamond, anchor, adjusted, 1)
 }
 
 func (e *Engine) adjustTrailingDiamondColorOverrides() {

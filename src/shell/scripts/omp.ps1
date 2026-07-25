@@ -37,7 +37,20 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
     # legacy per-prompt stream spawn.
     $script:ServeSupported = -not $script:ConstrainedLanguageMode -and $PSVersionTable.PSVersion.Major -ge 6
 
-    # Prompt related backup.
+    # Async mode: state is threaded through $global:_ompAsyncInit (set by the
+    # trampoline installed in the profile) and consumed once here, then
+    # cleared so a later *sync* re-source of this same file takes the sync
+    # branch below. Read via Get-Variable, not a bare $global: dereference -
+    # a plain sync source never sets this global, and a bare read of an
+    # unset variable throws under Set-StrictMode.
+    $script:AsyncInit = [bool](Get-Variable -Name _ompAsyncInit -Scope Global -ErrorAction Ignore -ValueOnly)
+    $global:_ompAsyncInit = $false
+
+    # Prompt related backup. In async mode this ends up capturing whatever
+    # wraps the trampoline at first-draw time (e.g. another tool's prompt
+    # hook), not the true pre-omp prompt - $global:_ompOriginalPromptFunction
+    # (captured by the trampoline itself, before anything can wrap it) is
+    # authoritative there instead. Kept here unconditionally for the sync path.
     $script:OriginalPromptFunction = $Function:prompt
     $originalPSReadLineOptions = Get-PSReadLineOption
     $script:OriginalContinuationPrompt = $originalPSReadLineOptions.ContinuationPrompt
@@ -445,30 +458,76 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
         Stop-StreamingProcess
     }
 
-    # Byte-level reader for NUL-delimited prompt records, shared by the serve
+    # Chunked reader for NUL-delimited prompt records, shared by the serve
     # daemon (which passes a wake signal) and the legacy per-prompt stream
     # (which passes $null). Runs in its own runspace for the lifetime of the
     # stream it reads.
+    #
+    # Reads in 4KB chunks and splits on NUL via [Array]::IndexOf instead of
+    # one $stream.ReadByte() call per byte: a gradient-heavy prompt record
+    # can run 1-2KB, and a PowerShell method call per byte to drain it was
+    # measured adding tens of ms per cycle - enough to push a spammed Enter
+    # past the ~33ms key-repeat interval and turn "stops instantly on
+    # release" into "keeps draining for seconds".
     $script:StreamingReaderScript = {
         param($stream, $signal)
-        while ($true) {
-            $bytes = [System.Collections.Generic.List[byte]]::new()
-            while (($b = $stream.ReadByte()) -notin -1, 0) {
-                $bytes.Add($b)
-            }
 
-            if ($bytes.Count -gt 0) {
-                Write-Output ([Text.Encoding]::UTF8.GetString($bytes.ToArray()))
-            }
+        $bufferSize = 4096
+        $buffer = [byte[]]::new($bufferSize)
+        $pending = [System.Collections.Generic.List[byte]]::new()
 
-            # Wake the waiter - also on EOF, so a dying daemon triggers the
-            # fallback path immediately instead of after the timeout.
-            if ($signal) {
-                $signal.Set()
-            }
+        $appendSegment = {
+            param($segStart, $segEnd)
 
-            if ($b -eq -1) {
+            $segLen = $segEnd - $segStart
+            if ($segLen -le 0) {
                 return
+            }
+
+            $segment = [byte[]]::new($segLen)
+            [Array]::Copy($buffer, $segStart, $segment, 0, $segLen)
+            $pending.AddRange($segment)
+        }
+
+        while ($true) {
+            $read = $stream.Read($buffer, 0, $bufferSize)
+
+            if ($read -le 0) {
+                if ($pending.Count -gt 0) {
+                    Write-Output ([Text.Encoding]::UTF8.GetString($pending.ToArray()))
+                }
+
+                # Wake the waiter - also on EOF, so a dying daemon triggers
+                # the fallback path immediately instead of after the timeout.
+                if ($signal) {
+                    $signal.Set()
+                }
+
+                return
+            }
+
+            $offset = 0
+            while ($offset -lt $read) {
+                $nul = [Array]::IndexOf($buffer, [byte]0, $offset, $read - $offset)
+
+                if ($nul -lt 0) {
+                    & $appendSegment $offset $read
+                    $offset = $read
+                    continue
+                }
+
+                & $appendSegment $offset $nul
+
+                if ($pending.Count -gt 0) {
+                    Write-Output ([Text.Encoding]::UTF8.GetString($pending.ToArray()))
+                    $pending.Clear()
+                }
+
+                if ($signal) {
+                    $signal.Set()
+                }
+
+                $offset = $nul + 1
             }
         }
     }
@@ -940,7 +999,22 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
         $global:LASTEXITCODE = $script:OriginalLastExitCode
     }
 
-    $Function:prompt = $promptFunction
+    if ($script:AsyncInit) {
+        # Never touch the global prompt binding after the trampoline installed
+        # it - anything wrapping it (e.g. another tool's prompt hook) must
+        # keep a valid reference forever. Export-ModuleMember below becomes a
+        # silent no-op with no function named "prompt" in this module, which
+        # is intentional. $global:_ompInitialized is deliberately separate
+        # from $global:_ompPromptFunction: it only ever means "don't
+        # re-import", so OnRemove can restore a falsy original prompt without
+        # the trampoline mistaking that for "never initialized" and silently
+        # reinstalling this module on the next draw.
+        $global:_ompPromptFunction = $promptFunction
+        $global:_ompInitialized = $true
+    }
+    else {
+        $Function:prompt = $promptFunction
+    }
 
     # set secondary prompt
     Set-PSReadLineOption -ContinuationPrompt ((Invoke-Utf8Posh @("print", "secondary", "--shell=$script:ShellName")) -join "`n")
@@ -1282,7 +1356,29 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
 
             Remove-Item Function:Get-PoshStackCount -ErrorAction SilentlyContinue
 
-            $Function:prompt = $script:OriginalPromptFunction
+            if ($script:AsyncInit) {
+                # Restore from the trampoline's own capture, never from
+                # $script:OriginalPromptFunction - in async mode that backup
+                # holds the wrapper chain (e.g. another tool's prompt hook),
+                # and restoring it here would recurse infinitely. Keep
+                # $global:_ompInitialized true even when the captured
+                # original is falsy, so the trampoline treats this as
+                # "restored", not "never initialized" - otherwise the next
+                # draw would silently reinstall the module Remove-Module just
+                # removed.
+                $global:_ompPromptFunction = $global:_ompOriginalPromptFunction
+                $global:_ompInitialized = $true
+            }
+            else {
+                # Only restore if this module's own prompt function is still
+                # the live global binding. If something replaced it since
+                # (e.g. a fresh async trampoline installed while switching
+                # this session from sync to async), leave it alone instead of
+                # clobbering whatever now owns the prompt.
+                if ($Function:prompt -eq $promptFunction) {
+                    $Function:prompt = $script:OriginalPromptFunction
+                }
+            }
 
             (Get-PSReadLineOption).ContinuationPrompt = $script:OriginalContinuationPrompt
             (Get-PSReadLineOption).PromptText = $script:OriginalPromptText

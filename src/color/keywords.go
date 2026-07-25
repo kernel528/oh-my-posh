@@ -1,5 +1,7 @@
 package color
 
+import "slices"
+
 const (
 	// Transparent implies a transparent color
 	Transparent Ansi = "transparent"
@@ -26,7 +28,9 @@ func (color Ansi) isKeyword() bool {
 
 func (color Ansi) Resolve(current *Set, parents []*Set) Ansi {
 	resolveParentColor := func(keyword Ansi) Ansi {
-		for _, parentColor := range parents {
+		// parents is a stack pushed tail-first (see terminal.SetParentColors):
+		// the nearest ancestor is the last element, so walk back-to-front.
+		for _, parentColor := range slices.Backward(parents) {
 			if parentColor == nil {
 				return Transparent
 			}
@@ -40,15 +44,39 @@ func (color Ansi) Resolve(current *Set, parents []*Set) Ansi {
 				if keyword == "" {
 					return Transparent
 				}
-				return keyword
+				return keyword.GradientLast()
 			}
+
+			if !keyword.IsGradient() {
+				continue
+			}
+
+			// a parent gradient collapses to its last stop; a keyword stop refers to
+			// that SAME parent's colors, never to the child segment asking for the
+			// parent color. A parentBackground/parentForeground stop walks further up
+			// through the next iteration; an unresolvable self-reference degrades to
+			// transparent instead of leaking a keyword the child would misresolve.
+			stop := keyword.GradientLast()
+
+			switch stop { //nolint:exhaustive
+			case Foreground:
+				stop = parentColor.Foreground.GradientLast()
+			case Background:
+				stop = parentColor.Background.GradientLast()
+			}
+
+			if stop.isKeyword() && stop != ParentBackground && stop != ParentForeground && stop != Transparent {
+				return Transparent
+			}
+
+			keyword = stop
 		}
 
 		if keyword == "" {
 			return Transparent
 		}
 
-		return keyword
+		return keyword.GradientLast()
 	}
 
 	resolveKeyword := func(keyword Ansi) Ansi {
@@ -57,7 +85,7 @@ func (color Ansi) Resolve(current *Set, parents []*Set) Ansi {
 			return current.Background
 		case keyword == Foreground && current != nil:
 			return current.Foreground
-		case (keyword == ParentBackground || keyword == ParentForeground) && parents != nil:
+		case (keyword == ParentBackground || keyword == ParentForeground) && len(parents) != 0:
 			return resolveParentColor(keyword)
 		default:
 			return Transparent

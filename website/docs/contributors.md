@@ -515,6 +515,11 @@ Thanks goes to these wonderful people ([emoji key][acek]):
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/ceilidhboy"><img src="https://avatars.githubusercontent.com/u/334791?v=4?s=100" width="100px;" alt="Mike Scott"/><br /><sub><b>Mike Scott</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=ceilidhboy" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://ajpinedam.dev"><img src="https://avatars.githubusercontent.com/u/1900897?v=4?s=100" width="100px;" alt="Andres Pineda"/><br /><sub><b>Andres Pineda</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=ajpinedam" title="Code">💻</a> <a href="#design-ajpinedam" title="Design">🎨</a> <a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=ajpinedam" title="Documentation">📖</a></td>
     </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/14096"><img src="https://avatars.githubusercontent.com/u/11175503?v=4?s=100" width="100px;" alt="14096"/><br /><sub><b>14096</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=14096" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/onyxx72"><img src="https://avatars.githubusercontent.com/u/59670938?v=4?s=100" width="100px;" alt="onyxx"/><br /><sub><b>onyxx</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=onyxx72" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ihopenre-eng"><img src="https://avatars.githubusercontent.com/u/247072151?v=4?s=100" width="100px;" alt="Lee Seonghyeon · 이성현"/><br /><sub><b>Lee Seonghyeon · 이성현</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=ihopenre-eng" title="Code">💻</a></td>
+    </tr>
   </tbody>
 </table>
 
