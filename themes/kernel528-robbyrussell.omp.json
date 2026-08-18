@@ -6,21 +6,42 @@
       "alignment": "left",
       "segments": [
         {
-          "foreground": "#56B6C2",
+          "foreground": "yellow",
           "options": {
             "style": "folder"
           },
           "style": "plain",
-          "template": "{{ .Path }}",
+          "template": "{{ .Path }} ",
           "type": "path"
         },
         {
-          "foreground": "#D0666F",
+          "foreground": "blue",
           "options": {
+            "fetch_status": true,
             "branch_icon": ""
           },
           "style": "plain",
-          "template": " <#5FAAE8>git:(</>{{ .HEAD }}<#5FAAE8>)</>",
+          "template": "git:",
+          "type": "git"
+        },
+        {
+          "foreground": "cyan",
+          "options": {
+            "fetch_status": true,
+            "branch_icon": ""
+          },
+          "style": "plain",
+          "template": "{{ .HEAD }}",
+          "type": "git"
+        },
+        {
+          "foreground": "red",
+          "options": {
+            "fetch_status": true,
+            "branch_icon": ""
+          },
+          "style": "plain",
+          "template": "{{ if or (.Working.Changed) (.Staging.Changed) }} x{{ end }}",
           "type": "git"
         },
         {
