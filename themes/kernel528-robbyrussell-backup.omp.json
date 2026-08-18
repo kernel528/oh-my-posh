@@ -17,10 +17,10 @@
         {
           "foreground": "#D0666F",
           "options": {
-            "fetch_status": true
+            "branch_icon": ""
           },
           "style": "plain",
-          "template": "git:({{ .HEAD }}){{ if or (.Working.Changed) (.Staging.Changed) }} x{{ end }}",
+          "template": " <#5FAAE8>git:(</>{{ .HEAD }}<#5FAAE8>)</>",
           "type": "git"
         },
         {
