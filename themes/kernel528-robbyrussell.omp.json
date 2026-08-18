@@ -11,7 +11,7 @@
             "style": "folder"
           },
           "style": "plain",
-          "template": "{{ .Path }}",
+          "template": "{{ .Path }} ",
           "type": "path"
         },
         {
@@ -20,7 +20,7 @@
             "fetch_status": true
           },
           "style": "plain",
-          "template": "git:({{ .HEAD }}){{ if or (.Working.Changed) (.Staging.Changed) }} x{{ end }}",
+          "template": "git: {{ .HEAD }} {{ if or (.Working.Changed) (.Staging.Changed) }} x{{ end }}",
           "type": "git"
         },
         {
