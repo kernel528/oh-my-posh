@@ -13,13 +13,9 @@ type Battery struct {
 }
 
 const (
-	// ChargingIcon to display when charging
-	ChargingIcon options.Option = "charging_icon"
-	// DischargingIcon o display when discharging
+	ChargingIcon    options.Option = "charging_icon"
 	DischargingIcon options.Option = "discharging_icon"
-	// ChargedIcon to display when fully charged
-	ChargedIcon options.Option = "charged_icon"
-	// NotChargingIcon to display when on AC power
+	ChargedIcon     options.Option = "charged_icon"
 	NotChargingIcon options.Option = "not_charging_icon"
 )
 
@@ -39,11 +35,8 @@ func (b *Battery) Enabled() bool {
 		return false
 	}
 
-	b.Info = *info
-
-	// case on computer without batteries(no error, empty array)
-	if err == nil && b.Percentage == 0 {
-		return false
+	if info != nil {
+		b.Info = *info
 	}
 
 	switch b.State {

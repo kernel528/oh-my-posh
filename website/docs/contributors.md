@@ -1,7 +1,7 @@
 ---
 id: contributors
 title: Contributors
-sidebar_label: 🙏 Contributors
+sidebar_label: Contributors
 ---
 
 Thanks goes to these wonderful people ([emoji key][acek]):
@@ -519,6 +519,15 @@ Thanks goes to these wonderful people ([emoji key][acek]):
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/14096"><img src="https://avatars.githubusercontent.com/u/11175503?v=4?s=100" width="100px;" alt="14096"/><br /><sub><b>14096</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=14096" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/onyxx72"><img src="https://avatars.githubusercontent.com/u/59670938?v=4?s=100" width="100px;" alt="onyxx"/><br /><sub><b>onyxx</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=onyxx72" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/ihopenre-eng"><img src="https://avatars.githubusercontent.com/u/247072151?v=4?s=100" width="100px;" alt="Lee Seonghyeon · 이성현"/><br /><sub><b>Lee Seonghyeon · 이성현</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=ihopenre-eng" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://gravifer.cyou"><img src="https://avatars.githubusercontent.com/u/44160838?v=4?s=100" width="100px;" alt="Tci Gravifer Fang"/><br /><sub><b>Tci Gravifer Fang</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=Gravifer" title="Code">💻</a> <a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=Gravifer" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://montemagno.com"><img src="https://avatars.githubusercontent.com/u/1676321?v=4?s=100" width="100px;" alt="James Montemagno"/><br /><sub><b>James Montemagno</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=jamesmontemagno" title="Documentation">📖</a> <a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=jamesmontemagno" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/davidlindenbaum"><img src="https://avatars.githubusercontent.com/u/4588472?v=4?s=100" width="100px;" alt="David Lindenbaum"/><br /><sub><b>David Lindenbaum</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=davidlindenbaum" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/adamradocz"><img src="https://avatars.githubusercontent.com/u/16503773?v=4?s=100" width="100px;" alt="Adam Radocz"/><br /><sub><b>Adam Radocz</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=adamradocz" title="Documentation">📖</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/e-kulikov"><img src="https://avatars.githubusercontent.com/u/3277076?v=4?s=100" width="100px;" alt="Evgeny Kulikov"/><br /><sub><b>Evgeny Kulikov</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=e-kulikov" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://jinli.io"><img src="https://avatars.githubusercontent.com/u/26253144?v=4?s=100" width="100px;" alt="lijin"/><br /><sub><b>lijin</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=jin-li" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://ezquieldev.vercel.app/"><img src="https://avatars.githubusercontent.com/u/115424590?v=4?s=100" width="100px;" alt="Ezequiel Salazar"/><br /><sub><b>Ezequiel Salazar</b></sub></a><br /><a href="https://github.com/JanDeDobbeleer/oh-my-posh/commits?author=Ezequie1Sc" title="Documentation">📖</a></td>
     </tr>
   </tbody>
 </table>

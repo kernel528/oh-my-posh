@@ -1,9 +1,9 @@
-//go:build !windows
+//go:build !windows && !js
 
 package runtime
 
 import (
-	"os"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -13,13 +13,7 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	mem "github.com/shirou/gopsutil/v4/mem"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
-	"golang.org/x/sys/unix"
 )
-
-func (term *Terminal) Root() bool {
-	defer log.Trace(time.Now())
-	return os.Geteuid() == 0
-}
 
 func (term *Terminal) QueryWindowTitles(_, _ string) (string, error) {
 	return "", &NotImplemented{}
@@ -69,24 +63,34 @@ func (term *Terminal) TerminalWidth() (int, error) {
 	}
 
 	width, err := terminal.Width()
-	if err != nil {
-		log.Error(err)
+	if width == 0 {
+		width, err = resolveTerminalWidth(width, err, term.Getenv("COLUMNS"))
 	}
 
-	// fetch width from the environment variable
-	// in case the terminal width is not available
-	if width == 0 {
-		i, err := strconv.Atoi(term.Getenv("COLUMNS"))
-		if err != nil {
-			log.Error(err)
-		}
-		width = uint(i)
+	if err != nil {
+		log.Error(err)
 	}
 
 	term.CmdFlags.TerminalWidth = int(width)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
 
 	return term.CmdFlags.TerminalWidth, err
+}
+
+func resolveTerminalWidth(width uint, terminalErr error, columns string) (uint, error) {
+	if width != 0 {
+		return width, terminalErr
+	}
+
+	columnWidth, err := strconv.Atoi(columns)
+	if err != nil {
+		return 0, errors.Join(terminalErr, err)
+	}
+	if columnWidth <= 0 {
+		return 0, errors.Join(terminalErr, errors.New("terminal width must be greater than zero"))
+	}
+
+	return uint(columnWidth), nil
 }
 
 func (term *Terminal) Platform() string {
@@ -161,11 +165,6 @@ func (term *Terminal) ConvertToLinuxPath(input string) string {
 		return linuxPath
 	}
 	return input
-}
-
-func (term *Terminal) DirIsWritable(input string) bool {
-	defer log.Trace(time.Now(), input)
-	return unix.Access(input, unix.W_OK) == nil
 }
 
 func (term *Terminal) Connection(_ ConnectionType) (*Connection, error) {

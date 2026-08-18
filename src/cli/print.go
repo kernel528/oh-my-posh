@@ -9,7 +9,7 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
-	"github.com/spf13/cobra"
+	"github.com/jandedobbeleer/oh-my-posh/src/cmdtree"
 )
 
 var (
@@ -34,16 +34,15 @@ var (
 	interrupted  bool
 )
 
-// printCmd represents the print command
 var printCmd = createPrintCmd()
 
 func init() {
 	RootCmd.AddCommand(printCmd)
 }
 
-func createPrintCmd() *cobra.Command {
-	printCmd := &cobra.Command{
-		Use:   "print [debug|primary|secondary|transient|transient-right|right|tooltip|valid|error|preview]",
+func createPrintCmd() *cmdtree.Command {
+	printCmd := &cmdtree.Command{
+		Use:   "print [debug|primary|secondary|transient|transient-right|right|tooltip|valid|error|preview|cursor]",
 		Short: "Print the prompt/context",
 		Long:  "Print one of the prompts based on the location/use-case.",
 		ValidArgs: []string{
@@ -57,9 +56,10 @@ func createPrintCmd() *cobra.Command {
 			prompt.VALID,
 			prompt.ERROR,
 			prompt.PREVIEW,
+			prompt.CURSOR,
 		},
 		Args: NoArgsOrOneValidArg,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cmdtree.Command, args []string) {
 			if len(args) == 0 {
 				_ = cmd.Help()
 				return
@@ -134,6 +134,8 @@ func createPrintCmd() *cobra.Command {
 				fmt.Print(eng.ExtraPrompt(prompt.Error))
 			case prompt.PREVIEW:
 				fmt.Print(eng.Preview())
+			case prompt.CURSOR:
+				fmt.Print(eng.CursorStyle())
 			default:
 				_ = cmd.Help()
 			}

@@ -14,6 +14,10 @@ import (
 )
 
 type store struct {
+	// mtime is the on-disk file's modification time as of the last load or
+	// refresh. A long-lived process (serve) uses it to detect writes made by
+	// other processes (e.g. toggle) between render cycles - see Refresh.
+	mtime    time.Time
 	cache    *maps.Concurrent[*Entry[any]]
 	filePath string
 	dirty    bool
@@ -46,7 +50,6 @@ func (s Store) new() *store {
 	}
 }
 
-// getStore returns the appropriate store based on the Store identifier
 func (s Store) get() *store {
 	switch s {
 	case Device:
@@ -64,7 +67,6 @@ func (s Store) get() *store {
 	}
 }
 
-// Init initializes a store with the given file path
 func (s Store) init(filePath string, persist bool) {
 	defer log.Trace(time.Now(), string(s), filePath)
 
@@ -74,6 +76,7 @@ func (s Store) init(filePath string, persist bool) {
 	store.persist = persist
 	store.dirty = false
 	store.locked = false
+	store.mtime = time.Time{}
 
 	reader, err := openFile(store.filePath)
 	if err != nil {
@@ -93,6 +96,10 @@ func (s Store) init(filePath string, persist bool) {
 	}
 
 	defer reader.Close()
+
+	if info, err := os.Stat(store.filePath); err == nil {
+		store.mtime = info.ModTime()
+	}
 
 	var list maps.Simple[*Entry[any]]
 
@@ -116,8 +123,9 @@ func (s Store) init(filePath string, persist bool) {
 	}
 }
 
-// touchSessionFile updates the session file's modification time if it's older than 1 hour.
-// This prevents stale session cache files from being cleaned up while reducing steady-state overhead.
+// Updates the modification time if older than 1 hour, preventing stale
+// session cache files from being cleaned up while reducing steady-state
+// overhead.
 func touchSessionFile(filePath string) {
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -133,10 +141,70 @@ func touchSessionFile(filePath string) {
 	}
 }
 
+// Refresh re-syncs the in-memory store with the on-disk file if it has
+// changed since the last load or refresh, merging entries by Timestamp (the
+// newer value wins). A short-lived, one-shot invocation never needs this -
+// init() already loads the current file once. It exists for a long-lived
+// process (serve) that keeps its cache in memory for the session: without
+// it, a write from another process (e.g. `toggle`, `enable`/`disable`)
+// would stay invisible until the daemon exits.
+func Refresh(s Store) {
+	defer log.Trace(time.Now(), string(s))
+
+	store := s.get()
+	if store == nil || store.locked || store.filePath == "" {
+		return
+	}
+
+	info, err := os.Stat(store.filePath)
+	if err != nil || !info.ModTime().After(store.mtime) {
+		return
+	}
+
+	reader, err := openFile(store.filePath)
+	if err != nil {
+		return
+	}
+
+	defer reader.Close()
+
+	var list maps.Simple[*Entry[any]]
+
+	dec := gob.NewDecoder(reader)
+	if err := dec.Decode(&list); err != nil {
+		log.Error(err)
+		return
+	}
+
+	for key, diskEntry := range list {
+		if diskEntry.Expired() {
+			continue
+		}
+
+		if current, found := store.cache.Get(key); found && current.Timestamp >= diskEntry.Timestamp {
+			continue
+		}
+
+		log.Debugf("(%s) refreshing %s from disk", string(s), key)
+		store.cache.Set(key, diskEntry)
+	}
+
+	store.mtime = info.ModTime()
+}
+
 func (s Store) close() {
 	defer log.Trace(time.Now(), string(s))
 
 	store := s.get()
+
+	// Pick up any write from another process one last time before a dirty
+	// store overwrites the file, so a change made after the last Refresh
+	// (e.g. right before the shell exits) isn't clobbered by this store's
+	// own, possibly stale, in-memory copy.
+	if store != nil && !store.locked && store.persist && store.dirty {
+		Refresh(s)
+	}
+
 	if store == nil || store.locked || !store.persist || !store.dirty {
 		if s == Session && store != nil && !store.locked && store.filePath != "" {
 			touchSessionFile(store.filePath)
@@ -161,19 +229,27 @@ func (s Store) close() {
 		return
 	}
 
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Error(err)
-		}
-	}()
-
 	enc := gob.NewEncoder(file)
 	if err := enc.Encode(cache); err != nil {
 		log.Error(err)
 	}
+
+	if err := file.Close(); err != nil {
+		log.Error(err)
+	}
+
+	// On Windows, the mmap-backed write path doesn't reliably update the
+	// file's on-disk last-write-time (per Microsoft's docs). For the session
+	// store that can lead to an actively-used cache being mistaken for stale
+	// and swept up by cache.Clear(); for either store, a long-lived Refresh
+	// reader (serve) needs a trustworthy mtime to notice this write at all.
+	// Explicitly bump it now that the file is closed (and the mmap
+	// unmap/flush on Windows has happened).
+	if err := os.Chtimes(store.filePath, time.Now(), time.Now()); err != nil {
+		log.Error(err)
+	}
 }
 
-// Get retrieves a typed value from the specified store
 func Get[T any](s Store, key string) (T, bool) {
 	var zero T
 	defer log.Trace(time.Now(), string(s), key)
@@ -203,11 +279,20 @@ func Get[T any](s Store, key string) (T, bool) {
 		return typed, true
 	}
 
+	// gob.Register keys its decode-side type map on the exact type it was given,
+	// while encoding an interface value uses the base type. Registering a type
+	// as a pointer (see segment_registry.go) therefore makes every gob round-trip
+	// of a value stored under that type come back as *T instead of T. Accept that
+	// shape here rather than dropping it as a cache miss.
+	if ptr, ok := entry.Value.(*T); ok && ptr != nil {
+		log.Debugf("(%s) found entry: %s - %v", string(s), key, *ptr)
+		return *ptr, true
+	}
+
 	log.Error(fmt.Errorf("(%s) type mismatch for key: %s. Got %T, expected %T", string(s), key, entry.Value, zero))
 	return zero, false
 }
 
-// Set stores a typed value in the specified store
 func Set[T any](s Store, key string, value T, duration Duration) {
 	defer log.Trace(time.Now(), string(s), key)
 
@@ -233,7 +318,6 @@ func Set[T any](s Store, key string, value T, duration Duration) {
 	store.dirty = true
 }
 
-// Delete removes a key from the specified store
 func Delete(s Store, key string) {
 	defer log.Trace(time.Now(), string(s), key)
 

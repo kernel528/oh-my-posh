@@ -2,14 +2,10 @@
 ---@diagnostic disable: undefined-field
 ---@diagnostic disable: lowercase-global
 
--- Environment variables
 os.setenv('POSH_SHELL', 'cmd')
 
--- disable all known python virtual environment prompts
 os.setenv('VIRTUAL_ENV_DISABLE_PROMPT', '1')
 os.setenv('PYENV_VIRTUALENV_DISABLE_PROMPT', '1')
-
--- Helper functions
 
 local function get_priority_number(name, default)
     local value = os.getenv(name)
@@ -23,13 +19,9 @@ local function get_priority_number(name, default)
     return default
 end
 
--- Environment variables
-
 local function environment_onbeginedit()
 
 end
-
--- Local state
 
 local endedit_time = 0
 local last_duration = 0
@@ -52,27 +44,19 @@ local function cache_onbeginedit()
     local cwd = os.getcwd()
     local old_cache = cached_prompt
 
-    -- Start a new table for the new edit/prompt session.
     cached_prompt = { cwd = cwd }
 
-    -- Copy the cached left/right prompt strings if the cwd hasn't changed.
-    -- IMPORTANT OPTIMIZATION:  This keeps the prompt highly responsive, except
-    -- when changing the current working directory.
+    -- IMPORTANT OPTIMIZATION: reusing the cached left/right prompt when the cwd
+    -- hasn't changed is what keeps the prompt highly responsive.
     if old_cache.cwd == cwd then
         cached_prompt.left = old_cache.left
         cached_prompt.right = old_cache.right
     end
 end
 
--- Executable
-
 local omp_executable = '::OMP::'
 
--- Configuration
-
 os.setenv('POSH_SHELL_VERSION', string.format('clink v%s.%s.%s.%s', clink.version_major, clink.version_minor, clink.version_patch, clink.version_commit))
-
--- Execution helpers
 
 local function can_async()
     if (clink.version_encoded or 0) >= 10030001 then
@@ -109,8 +93,6 @@ local function run_posh_command(command)
     end
     return output
 end
-
--- Duration functions
 
 local function os_clock_millis()
     -- Clink v1.2.30 has a fix for Lua's os.clock() implementation failing after
@@ -202,35 +184,43 @@ local function json_escape(str)
     return (str:gsub('%c', ''))
 end
 
-local function serve_env_json()
+-- Returns the full exported environment as "KEY=VALUE\0" records, terminated
+-- by one extra bare NUL (an empty record) - see readEnvBlob on the daemon
+-- side. No escaping is needed: env values can never contain a NUL byte on
+-- any OS, and os.getenv already returns each variable's real, single-string
+-- value.
+local function serve_env_raw()
     local parts = {}
 
     local function add(name, value)
         if value then
-            parts[#parts + 1] = string.format('"%s":"%s"', name, json_escape(value))
+            parts[#parts + 1] = name .. '=' .. value .. '\0'
         end
     end
-
-    add('PATH', os.getenv('PATH'))
-    add('VIRTUAL_ENV', os.getenv('VIRTUAL_ENV'))
-    add('CONDA_PROMPT_MODIFIER', os.getenv('CONDA_PROMPT_MODIFIER'))
 
     if os.getenvnames then
         for _, name in ipairs(os.getenvnames()) do
-            if name:sub(1, 5) == 'POSH_' then
-                add(name, os.getenv(name))
-            end
+            add(name, os.getenv(name))
         end
+    else
+        -- Older Clink without os.getenvnames can't enumerate the
+        -- environment; fall back to the variables oh-my-posh itself depends
+        -- on rather than sending nothing.
+        add('PATH', os.getenv('PATH'))
+        add('VIRTUAL_ENV', os.getenv('VIRTUAL_ENV'))
+        add('CONDA_PROMPT_MODIFIER', os.getenv('CONDA_PROMPT_MODIFIER'))
     end
 
-    return '{' .. table.concat(parts, ',') .. '}'
+    parts[#parts + 1] = '\0' -- empty record: terminates the blob
+
+    return table.concat(parts)
 end
 
 local function serve_write_request()
     serve.cycle = serve.cycle + 1
     serve.transient = nil
 
-    -- Forwarded to the daemon through the POSH_* env overlay below.
+    -- Forwarded to the daemon through the full env blob below.
     os.setenv('POSH_CURSOR_LINE', console.getnumlines())
 
     local status = 0
@@ -239,18 +229,21 @@ local function serve_write_request()
     end
 
     local request = string.format(
-        '{"command":"render","id":%d,"shell":"cmd","status":%d,"no-status":%s,"execution-time":%d,"pwd":"%s","terminal-width":%d,"wait":true,"env":%s}\n',
+        '{"command":"render","id":%d,"shell":"cmd","status":%d,"no-status":%s,"execution-time":%d,"pwd":"%s","terminal-width":%d,"wait":true}\n',
         serve.cycle,
         status,
         no_exit_code and 'true' or 'false',
         last_duration or 0,
         json_escape(os.getcwd() or ''),
-        console.getwidth() or 0,
-        serve_env_json()
+        console.getwidth() or 0
     )
 
+    -- The full environment follows the header, unconditionally - see
+    -- serve_env_raw. Both writes go through the same pipe from the same
+    -- sequential writer, so they can never interleave with another request.
     return (pcall(function()
         assert(serve.w:write(request))
+        assert(serve.w:write(serve_env_raw()))
         serve.w:flush()
     end))
 end
@@ -331,8 +324,6 @@ local function serve_render()
     return primary
 end
 
--- Prompt functions
-
 local function execution_time_option()
     if last_duration ~= nil then
         return '--execution-time=' .. last_duration
@@ -371,11 +362,9 @@ end
 
 local function set_posh_tooltip(tip_command)
     if tip_command ~= '' and tip_command ~= cached_prompt.tip_command then
-        -- Escape special characters properly, if any.
         local escaped_tip_command = string.gsub(tip_command, '(\\+)"', '%1%1"'):gsub('(\\+)$', '%1%1'):gsub('"', '\\"'):gsub('([&<>%(%)@|%^])', '^%1'):gsub('%%', '%%%%')
         local command_option = string.format('--command "%s"', escaped_tip_command)
         local tooltip = get_posh_prompt('tooltip', command_option)
-        -- Do not cache an empty tooltip.
         if tooltip == '' then
             return
         end
@@ -385,7 +374,6 @@ local function set_posh_tooltip(tip_command)
 end
 
 local function display_cached_prompt()
-    -- Use what's already cached; avoid running oh-my-posh.
     cached_prompt.only_use_cache = true
     clink.refilterprompt()
     cached_prompt.only_use_cache = nil
@@ -399,9 +387,7 @@ local function url_encode(str)
 end
 
 local function command_executed_mark(input)
-    if string.gsub(input, '^%s*(.-)%s*$', '%1') ~= '' then
-        no_exit_code = false
-    end
+    no_exit_code = string.gsub(input, '^%s*(.-)%s*$', '%1') == ''
 
     if not ftcs_marks_enabled then
         return
@@ -448,13 +434,11 @@ function p:filter(prompt)
 
     local need_left = true
 
-    -- Get a left prompt immediately if nothing is available yet.
     if not cached_prompt.left then
         cached_prompt.left = get_posh_prompt('primary')
         need_left = false
     end
 
-    -- Get left/right prompts asynchronously, if possible.
     if not cached_prompt.only_use_cache then
         if can_async() then
             -- IMPORTANT:  Defining this function inline makes sure it only
@@ -463,11 +447,9 @@ function p:filter(prompt)
             -- discards the old coroutine) and a new coroutine starts, the old
             -- coroutine won't stomp on the new cached_prompt table.
             clink.promptcoroutine(function()
-                -- Generate left prompt, if needed.
                 if need_left then
                     cached_prompt.left = get_posh_prompt('primary')
                 end
-                -- Generate right prompt, if needed.
                 if rprompt_enabled then
                     if need_left then
                         -- Show left side while right side is being generated.
@@ -496,9 +478,8 @@ function p:filter(prompt)
 end
 
 function p:rightfilter(prompt)
-    -- Return cached tooltip if available, otherwise return cached rprompt.
-    -- Returning false as the second return value halts further prompt
-    -- filtering, to keep other things from overriding what we generated.
+    -- Returning false as the second value halts further prompt filtering, so
+    -- other filters don't override what we generated.
     return (cached_prompt.tooltip or cached_prompt.right), false
 end
 
@@ -526,8 +507,6 @@ function p:transientrightfilter(prompt)
     return '', false
 end
 
--- Event handlers
-
 local function builtin_modules_onbeginedit()
     cache_onbeginedit()
     duration_onbeginedit()
@@ -544,17 +523,12 @@ if clink.onbeginedit ~= nil and clink.onendedit ~= nil then
     clink.onendedit(builtin_modules_onendedit)
 end
 
--- Tooltips
-
 function _omp_space_keybinding(rl_buffer)
     -- Insert space first, in case it might affect the tip word, e.g. it could
     -- split "gitcommit" into "git commit".
     rl_buffer:insert(' ')
-    -- Get the first word of command line as tip.
     local tip_command = rl_buffer:getbuffer():gsub('^%s*(.-)%s*$', '%1')
 
-    -- Generate a tooltip asynchronously (via coroutine) if available, otherwise
-    -- generate a tooltip immediately.
     if not can_async() then
         set_posh_tooltip(tip_command)
         clink.refilterprompt()

@@ -53,6 +53,7 @@ You can set the following options to `true` to enable fetching additional inform
 | Name                  |        Type         | Default | Description                                                                                                                                                                                                                                                                                                                           |
 | --------------------- | :-----------------: | :-----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fetch_status`        |      `boolean`      | `false` | fetch the local changes                                                                                                                                                                                                                                                                                                               |
+| `native_status`       |      `boolean`      | `false` | fetch the status information using the built-in engine instead of the git CLI (experimental, falls back to git automatically). Falls back to the git CLI for sparse/split index, reftables, and submodule repositories                                                                                                                |
 | `fetch_push_status`   |      `boolean`      | `false` | fetch the push-remote ahead/behind information. Requires `fetch_status` to be enabled                                                                                                                                                                                                                                                 |
 | `ignore_status`       |     `[]string`      |         | do not fetch status for these repo's. Uses the repo's root folder and same logic as the [exclude_folders][exclude_folders] property                                                                                                                                                                                                   |
 | `fetch_upstream_icon` |      `boolean`      | `false` | fetch upstream icon                                                                                                                                                                                                                                                                                                                   |
@@ -138,6 +139,7 @@ You can set the following options to `true` to enable fetching additional inform
 | `.StashCount`     | `int`               | the stash count                                                                                                                  |
 | `.WorktreeCount`  | `int`               | the worktree count                                                                                                               |
 | `.IsWorkTree`     | `boolean`           | if in a worktree repo or not                                                                                                     |
+| `.MainWorktree`   | `string`            | the absolute path to the main worktree; empty unless the current repository is a linked worktree                                 |
 | `.IsBare`         | `boolean`           | if in a bare repo or not, only set when `fetch_bare_info` is set to `true`                                                       |
 | `.Dir`            | `string`            | the repository's root directory                                                                                                  |
 | `.RelativeDir`    | `string`            | the current directory relative to the root directory                                                                             |
@@ -151,6 +153,14 @@ You can set the following options to `true` to enable fetching additional inform
 | `.User`           | `User`              | the current configured user (requires `fetch_user` to be enabled)                                                                |
 | `.Remotes`        | `map[string]string` | a map of remote names to their URLs                                                                                              |
 | `.LatestTag`      | `string`            | the latest tag name                                                                                                              |
+
+`.MainWorktree` requires Git 2.36 or newer. It is resolved lazily, so no additional command runs
+unless the property is referenced. Its first use in a linked worktree runs
+`git worktree list --porcelain -z`; the result is cached for the shell session and shared by
+sibling worktrees of the repository.
+
+The property is empty in the main worktree and when the main repository is bare. It also remains
+empty when Git does not support the command, the command fails, or its output cannot be parsed.
 
 #### Status
 

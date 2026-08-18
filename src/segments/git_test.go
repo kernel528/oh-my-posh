@@ -1,9 +1,11 @@
 package segments
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,13 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/ini"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
-	"gopkg.in/ini.v1"
 
 	"github.com/stretchr/testify/assert"
 	testify_ "github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -208,7 +212,7 @@ func TestEnabledInBareRepo(t *testing.T) {
 
 		g.configOnce = sync.Once{}
 		g.configOnce.Do(func() {
-			g.config, g.configErr = ini.Load([]byte(configData))
+			g.config, g.configErr = ini.Load(configData)
 		})
 
 		_ = g.Enabled()
@@ -1233,7 +1237,7 @@ func TestGitRemotes(t *testing.T) {
 
 		g.configOnce = sync.Once{}
 		g.configOnce.Do(func() {
-			g.config, g.configErr = ini.Load([]byte(tc.Config))
+			g.config, g.configErr = ini.Load(tc.Config)
 		})
 
 		got := g.Remotes()
@@ -1293,6 +1297,296 @@ func TestGitRepoName(t *testing.T) {
 		got := g.repoName()
 		assert.Equal(t, tc.Expected, got, tc.Case)
 	}
+}
+
+func TestParseMainWorktree(t *testing.T) {
+	cases := []struct {
+		Case     string
+		Output   string
+		Expected string
+		Valid    bool
+	}{
+		{
+			Case: "main worktree",
+			Output: "worktree /repo/main\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00" +
+				"worktree /repo/linked\x00HEAD abcdef1234567890\x00branch refs/heads/feature\x00\x00",
+			Expected: "/repo/main",
+			Valid:    true,
+		},
+		{
+			Case:     "path with spaces and newline",
+			Output:   "worktree /repo/main path\nwith newline\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00",
+			Expected: "/repo/main path\nwith newline",
+			Valid:    true,
+		},
+		{
+			Case:   "bare main repository",
+			Output: "worktree /repo/main.git\x00bare\x00\x00worktree /repo/linked\x00HEAD 1234567890abcdef\x00\x00",
+			Valid:  true,
+		},
+		{
+			Case: "empty output",
+		},
+		{
+			Case:   "missing record terminator",
+			Output: "worktree /repo/main\x00HEAD 1234567890abcdef",
+		},
+		{
+			Case:   "missing worktree field",
+			Output: "HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00",
+		},
+		{
+			Case:   "empty worktree path",
+			Output: "worktree \x00HEAD 1234567890abcdef\x00\x00",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			got, valid := parseMainWorktree(tc.Output)
+			assert.Equal(t, tc.Expected, got)
+			assert.Equal(t, tc.Valid, valid)
+		})
+	}
+}
+
+func TestGitMainWorktree(t *testing.T) {
+	cases := []struct {
+		Case          string
+		Output        string
+		CommandError  error
+		Expected      string
+		Linked        bool
+		ExpectedCalls int
+	}{
+		{
+			Case: "not a linked worktree",
+		},
+		{
+			Case:          "linked worktree",
+			Output:        "worktree /repo/main\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00",
+			Expected:      "/repo/main",
+			Linked:        true,
+			ExpectedCalls: 1,
+		},
+		{
+			Case:          "command failure",
+			CommandError:  errors.New("git failed"),
+			Linked:        true,
+			ExpectedCalls: 1,
+		},
+		{
+			Case:          "malformed output",
+			Output:        "worktree /repo/main",
+			Linked:        true,
+			ExpectedCalls: 1,
+		},
+	}
+
+	for index, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			commonDir := fmt.Sprintf("/repo/%d/.git", index)
+			key := fmt.Sprintf("%s@%s", mainWorktreeCacheKey, commonDir)
+			cache.Delete(cache.Session, key)
+			t.Cleanup(func() {
+				cache.Delete(cache.Session, key)
+			})
+
+			env := new(mock.Environment)
+			if tc.ExpectedCalls > 0 {
+				args := []string{
+					"-C", "/repo/linked",
+					"--no-optional-locks",
+					"-c", "core.quotepath=false",
+					"-c", "color.status=false",
+					"worktree", "list", "--porcelain", "-z",
+				}
+				env.On("RunCommand", GITCOMMAND, args).Return(tc.Output, tc.CommandError).Once()
+			}
+
+			g := &Git{
+				Scm: Scm{
+					command:     GITCOMMAND,
+					repoRootDir: "/repo/linked",
+					scmDir:      commonDir,
+				},
+				IsWorkTree: tc.Linked,
+			}
+			g.Init(options.Map{}, env)
+
+			got := renderTemplate(env, "{{ .MainWorktree }}|{{ .MainWorktree }}", g)
+
+			assert.Equal(t, tc.Expected+"|"+tc.Expected, got)
+			env.AssertNumberOfCalls(t, "RunCommand", tc.ExpectedCalls)
+		})
+	}
+}
+
+func TestGitMainWorktreeSessionCache(t *testing.T) {
+	const (
+		mainWorktree = TestRootPath + "repo/main"
+		firstRoot    = TestRootPath + "repo/linked-one"
+		secondRoot   = TestRootPath + "repo/linked-two"
+		commonDir    = mainWorktree + "/.git"
+	)
+
+	key := fmt.Sprintf("%s@%s", mainWorktreeCacheKey, commonDir)
+	cache.Delete(cache.Session, key)
+	t.Cleanup(func() {
+		cache.Delete(cache.Session, key)
+	})
+
+	firstEnv := new(mock.Environment)
+	firstGitFile := &runtime.FileInfo{
+		Path:         firstRoot + "/.git",
+		ParentFolder: firstRoot,
+	}
+	firstAdminDir := commonDir + "/worktrees/linked-one"
+	firstEnv.On("FileContent", firstGitFile.Path).Return("gitdir: " + firstAdminDir)
+	firstEnv.On("FileContent", filepath.Join(firstAdminDir, "gitdir")).Return(firstRoot + "/.git")
+	firstEnv.MockGitCommand(
+		firstRoot+"/",
+		"worktree "+mainWorktree+"\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00",
+		"worktree", "list", "--porcelain", "-z",
+	)
+	first := &Git{}
+	first.Init(options.Map{}, firstEnv)
+	require.True(t, first.hasWorktree(firstGitFile))
+	first.command = GITCOMMAND
+
+	secondEnv := new(mock.Environment)
+	secondGitFile := &runtime.FileInfo{
+		Path:         secondRoot + "/.git",
+		ParentFolder: secondRoot,
+	}
+	secondAdminDir := commonDir + "/worktrees/linked-two"
+	secondEnv.On("FileContent", secondGitFile.Path).Return("gitdir: ../main/.git/worktrees/linked-two")
+	secondEnv.On("FileContent", filepath.Join(secondAdminDir, "gitdir")).Return("../../../linked-two/.git")
+	second := &Git{}
+	second.Init(options.Map{}, secondEnv)
+	require.True(t, second.hasWorktree(secondGitFile))
+	second.command = GITCOMMAND
+
+	assert.Equal(t, firstAdminDir, first.mainSCMDir)
+	assert.Equal(t, secondAdminDir, second.mainSCMDir)
+	assert.Equal(t, commonDir, first.commonGitDir())
+	assert.Equal(t, commonDir, second.commonGitDir())
+
+	assert.Equal(t, mainWorktree, first.MainWorktree())
+	assert.Equal(t, mainWorktree, second.MainWorktree())
+	firstEnv.AssertNumberOfCalls(t, "RunCommand", 1)
+	secondEnv.AssertNotCalled(t, "RunCommand", testify_.Anything, testify_.Anything)
+}
+
+func TestGitMainWorktreeConvertsWSLPath(t *testing.T) {
+	const (
+		commonDir      = "C:/repo/main/.git"
+		windowsPath    = "C:/repo/main"
+		linuxPath      = "/mnt/c/repo/main"
+		linkedWorktree = "C:/repo/linked"
+	)
+
+	key := fmt.Sprintf("%s@%s", mainWorktreeCacheKey, commonDir)
+	cache.Delete(cache.Session, key)
+	t.Cleanup(func() {
+		cache.Delete(cache.Session, key)
+	})
+
+	env := new(mock.Environment)
+	env.On("RunCommand", "git.exe", []string{
+		"-C", linkedWorktree,
+		"--no-optional-locks",
+		"-c", "core.quotepath=false",
+		"-c", "color.status=false",
+		"worktree", "list", "--porcelain", "-z",
+	}).Return("worktree "+windowsPath+"\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00", nil).Once()
+	env.On("ConvertToLinuxPath").Return(linuxPath).Once()
+
+	g := &Git{
+		Scm: Scm{
+			command:         "git.exe",
+			repoRootDir:     linkedWorktree,
+			mainSCMDir:      commonDir + "/worktrees/linked",
+			IsWslSharedPath: true,
+		},
+		IsWorkTree: true,
+	}
+	g.Init(options.Map{}, env)
+
+	assert.Equal(t, linuxPath, g.MainWorktree())
+	env.AssertExpectations(t)
+}
+
+func TestGitMainWorktreeFromWindowsGitInWSL(t *testing.T) {
+	const (
+		windowsMain     = "D:/repo/main"
+		windowsLinked   = "D:/repo/linked"
+		linuxMain       = "/mnt/d/repo/main"
+		linuxLinked     = "/mnt/d/repo/linked"
+		linuxCommonDir  = linuxMain + "/.git"
+		linuxAdminDir   = linuxCommonDir + "/worktrees/linked"
+		windowsAdminDir = windowsMain + "/.git/worktrees/linked"
+	)
+
+	key := fmt.Sprintf("%s@%s", mainWorktreeCacheKey, linuxCommonDir)
+	cache.Delete(cache.Session, key)
+	t.Cleanup(func() {
+		cache.Delete(cache.Session, key)
+	})
+
+	env := new(mock.Environment)
+	gitFile := &runtime.FileInfo{
+		Path:         linuxLinked + "/.git",
+		ParentFolder: linuxLinked,
+	}
+	env.On("GOOS").Return("")
+	env.On("FileContent", gitFile.Path).Return("gitdir: " + windowsAdminDir).Once()
+	env.On("ConvertToLinuxPath").Return(linuxAdminDir).Once()
+	env.On("FileContent", filepath.Join(linuxAdminDir, "gitdir")).Return(windowsLinked + "/.git").Once()
+	env.On("ConvertToLinuxPath").Return(linuxLinked).Once()
+	env.On("ConvertToWindowsPath", linuxLinked).Return(windowsLinked).Once()
+	env.On("RunCommand", "git.exe", []string{
+		"-C", windowsLinked,
+		"--no-optional-locks",
+		"-c", "core.quotepath=false",
+		"-c", "color.status=false",
+		"worktree", "list", "--porcelain", "-z",
+	}).Return("worktree "+windowsMain+"\x00HEAD 1234567890abcdef\x00branch refs/heads/main\x00\x00", nil).Once()
+	env.On("ConvertToLinuxPath").Return(linuxMain).Once()
+
+	g := &Git{
+		Scm: Scm{
+			command:         "git.exe",
+			IsWslSharedPath: true,
+		},
+	}
+	g.Init(options.Map{}, env)
+
+	require.True(t, g.isRepo(gitFile))
+	assert.Equal(t, windowsLinked, g.repoRootDir)
+	assert.Equal(t, linuxCommonDir, g.commonGitDir())
+	assert.Equal(t, linuxMain, g.MainWorktree())
+	env.AssertExpectations(t)
+}
+
+func TestGitMainWorktreeIsLazy(t *testing.T) {
+	env := new(mock.Environment)
+	g := &Git{
+		Working: &GitStatus{},
+		Staging: &GitStatus{},
+		Scm: Scm{
+			command:     GITCOMMAND,
+			repoRootDir: "/repo/linked",
+			scmDir:      "/repo/.git",
+		},
+		IsWorkTree: true,
+	}
+	g.Init(options.Map{}, env)
+
+	got := renderTemplateNoTrimSpace(env, g.Template(), g)
+
+	assert.NotEmpty(t, got)
+	env.AssertNotCalled(t, "RunCommand", testify_.Anything, testify_.Anything)
 }
 
 func TestDisableWithJJEnabled(t *testing.T) {
@@ -1454,7 +1748,7 @@ func TestPushStatusAheadAndBehind(t *testing.T) {
 		g.configOnce = sync.Once{}
 		g.configOnce.Do(func() {
 			if len(tc.Config) > 0 {
-				g.config, g.configErr = ini.Load([]byte(tc.Config))
+				g.config, g.configErr = ini.Load(tc.Config)
 				return
 			}
 
@@ -1466,4 +1760,95 @@ func TestPushStatusAheadAndBehind(t *testing.T) {
 		assert.Equal(t, tc.ExpectedPushAhead, g.PushAhead, tc.Case)
 		assert.Equal(t, tc.ExpectedPushBehind, g.PushBehind, tc.Case)
 	}
+}
+
+// TestSetStatusNative builds a real temp repo with the git CLI (skipped when
+// git isn't on PATH), then asserts setStatusNative populates the same
+// fields as the existing exec+porcelain path for that exact repo. The
+// porcelain text fed to the exec path is captured from a real `git status`
+// call, so both sides are exercised against genuine, non-trivial repo state.
+func TestSetStatusNative(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	dir := t.TempDir()
+	runRealGit(t, dir, "init", "-q", "-b", "main", ".")
+	runRealGit(t, dir, "config", "user.email", "test@example.com")
+	runRealGit(t, dir, "config", "user.name", "Test")
+	runRealGit(t, dir, "config", "core.autocrlf", "false")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644))
+	runRealGit(t, dir, "add", ".")
+	runRealGit(t, dir, "commit", "-q", "-m", "init")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "untracked.txt"), []byte("u\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "staged-add.txt"), []byte("new\n"), 0o644))
+	runRealGit(t, dir, "add", "staged-add.txt")
+
+	worktreeGitDir := realGitPath(t, dir, "--git-dir")
+	commonGitDir := realGitPath(t, dir, "--git-common-dir")
+	repoRoot := realGitPath(t, dir, "--show-toplevel")
+
+	// Capture the exact porcelain text a real `git status` produces for this
+	// repo, then feed it through the existing exec parsing path via the
+	// mock environment, following the mocking pattern the other setStatus
+	// tests already use.
+	porcelain := runRealGit(t, dir, "status", "-unormal", "--branch", "--porcelain=2")
+
+	env := new(mock.Environment)
+	env.MockGitCommand(repoRoot, porcelain, "status", "-unormal", "--branch", "--porcelain=2")
+
+	gExec := &Git{Scm: Scm{command: GITCOMMAND, repoRootDir: repoRoot}}
+	gExec.Init(options.Map{}, env)
+	gExec.setStatus()
+
+	// A bare mock.Environment (no expectations configured) means any
+	// accidental exec fallback would either panic on an unmet expectation
+	// or, since Scm.command is unset here, silently return empty output —
+	// either way the sanity check below would catch it.
+	gNative := &Git{Scm: Scm{
+		mainSCMDir:  worktreeGitDir,
+		scmDir:      commonGitDir,
+		repoRootDir: repoRoot,
+	}}
+	gNative.Init(options.Map{NativeStatus: true}, new(mock.Environment))
+	gNative.setStatus()
+
+	// sanity: make sure this scenario actually exercises non-trivial status
+	// before comparing, so a broken fixture (or a silent fallback) can't
+	// pass by both sides being all-zero.
+	require.True(t, gNative.Working.Modified > 0 && gNative.Working.Untracked > 0 && gNative.Staging.Added > 0)
+
+	assert.Equal(t, gExec.Working, gNative.Working)
+	assert.Equal(t, gExec.Staging, gNative.Staging)
+	assert.Equal(t, gExec.Hash, gNative.Hash)
+	assert.Equal(t, gExec.ShortHash, gNative.ShortHash)
+	assert.Equal(t, gExec.Ref, gNative.Ref)
+	assert.Equal(t, gExec.Upstream, gNative.Upstream)
+	assert.Equal(t, gExec.Ahead, gNative.Ahead)
+	assert.Equal(t, gExec.Behind, gNative.Behind)
+	assert.Equal(t, gExec.UpstreamGone, gNative.UpstreamGone)
+}
+
+func runRealGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.CommandContext(context.Background(), "git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "git %s failed: %s", strings.Join(args, " "), out)
+	return string(out)
+}
+
+func realGitPath(t *testing.T, dir, arg string) string {
+	t.Helper()
+	out := runRealGit(t, dir, "rev-parse", "--path-format=absolute", arg)
+	return filepath.FromSlash(strings.TrimSpace(out))
 }

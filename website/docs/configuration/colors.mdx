@@ -129,6 +129,49 @@ character.
 
 :::
 
+## Shades
+
+Anywhere a **Standard color** is expected, you can instead use `darken(color, percent)` or
+`lighten(color, percent)` to shift a single color's lightness toward black or white:
+
+<Config
+  data={{
+    type: "text",
+    style: "plain",
+    foreground: "#3465A4",
+    background: "darken(#3465A4, 20)",
+  }}
+/>
+
+`percent` runs from `0` to `100` and sets how far to travel toward black or white. `0` leaves the
+color unchanged, `100` reaches near-black or near-white. The shift happens in the same HCL color
+space `dark-gradient` and `light-gradient` use, which holds the hue exact instead of muddying it.
+
+The color argument must resolve to a hex color, either a literal value (`darken(#3465A4, 20)`) or a
+[Palette reference][palette] to one (`darken(p:accent, 20)`). **ANSI color names** (`green`,
+`lightBlue`), **256 color palette numbers** and keywords such as `foreground` and `accent` render no
+color. Run `oh-my-posh debug` to see the reason.
+
+Those names carry no fixed RGB value. Your terminal's color scheme decides what `green` looks like,
+and Oh My Posh cannot ask the terminal for that value fast enough to do it on every render. To shade
+one of them, write its hex value into your [Palette][palette] once and shade the palette entry:
+
+<Config
+  data={{
+    palette: {
+      accent: "#3465A4",
+    },
+    type: "text",
+    style: "plain",
+    foreground: "p:accent",
+    background: "darken(p:accent, 20)",
+  }}
+/>
+
+A `darken` or `lighten` call takes a color, nothing more. You cannot nest one inside another, place
+one inside a `linear-gradient`, `dark-gradient` or `light-gradient`, or pass it gradient stops or
+segment keywords such as `parentBackground`.
+
 ## Color templates
 
 Array of string [templates][templates] to define the color based on the current context.

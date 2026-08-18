@@ -393,3 +393,282 @@ func TestProgressFunctions(t *testing.T) {
 		})
 	}
 }
+
+// paletteTestColors is a minimal color.String stand-in for TestAsAnsiColorsWithSourceSurvivesResolution's
+// palette case: it defers ToAnsi to an embedded *color.Defaults and only overrides Resolve to run
+// palette lookup, mirroring color.PaletteColors.Resolve without needing its unexported palette field.
+type paletteTestColors struct {
+	*color.Defaults
+	palette color.Palette
+}
+
+func (p *paletteTestColors) Resolve(colorString color.Ansi) (color.Ansi, error) {
+	return p.palette.ResolveColor(colorString)
+}
+
+// TestAsAnsiColorsWithSourceSurvivesResolution proves the resolve step (resolveAnsiColors,
+// exercised here through asAnsiColorsWithSource) hands back each channel's SOURCE form
+// unmangled, for every shape it can take. This is the value asAnsiColors used to discard
+// before ToAnsi's SGR conversion (writer.go's asAnsiColors historically returned only the
+// SGR pair); Stage 1 of the runs-as-intermediate-representation plan makes it available
+// alongside the SGR pair on the same color.History entry (see color.History.Add) because
+// SGR cannot be inverted back to it reliably.
+func TestAsAnsiColorsWithSourceSurvivesResolution(t *testing.T) {
+	defer func() {
+		Colors = nil
+		CurrentColors = nil
+		ParentColors = nil
+	}()
+
+	cases := []struct {
+		Case       string
+		Input      color.Ansi
+		Colors     color.String
+		WantSource color.Ansi
+	}{
+		{
+			Case:       "#RRGGBB hex",
+			Input:      "#FF5733",
+			Colors:     &color.Defaults{},
+			WantSource: "#FF5733",
+		},
+		{
+			Case:       "colour name from ansiColorCodes",
+			Input:      "red",
+			Colors:     &color.Defaults{},
+			WantSource: "red",
+		},
+		{
+			Case:       "transparent",
+			Input:      color.Transparent,
+			Colors:     &color.Defaults{},
+			WantSource: color.Transparent,
+		},
+		{
+			Case:       "accent",
+			Input:      color.Accent,
+			Colors:     &color.Defaults{},
+			WantSource: color.Accent,
+		},
+		{
+			Case:  "palette reference p:name",
+			Input: "p:myColor",
+			Colors: &paletteTestColors{
+				Defaults: &color.Defaults{},
+				palette:  color.Palette{"myColor": "#123456"},
+			},
+			WantSource: "#123456",
+		},
+		{
+			Case:       "plain numeric 0-255",
+			Input:      "196",
+			Colors:     &color.Defaults{},
+			WantSource: "196",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			Colors = tc.Colors
+			CurrentColors = nil
+			ParentColors = nil
+
+			// background is under test; foreground is a fixed, uninteresting "white"
+			// so inverted never triggers and doesn't confound the background assertions.
+			bg, _, bgSource, _ := asAnsiColorsWithSource(tc.Input, "white")
+
+			assert.Equal(t, tc.WantSource, bgSource, "source form must survive resolution unmodified")
+
+			// the returned SGR must be exactly ToAnsi(source): the two representations
+			// must never diverge, or a later encoder reading source could not trust it
+			// describes the same color the SGR pair already printed.
+			assert.Equal(t, tc.Colors.ToAnsi(bgSource, true), bg, "SGR must equal ToAnsi(source)")
+
+			// SGR is a genuinely different (and, for hex/numeric, lossy) encoding of the
+			// same value, except where ToAnsi is an identity function (transparent).
+			if tc.WantSource != color.Transparent {
+				assert.NotEqual(t, string(bgSource), string(bg), "SGR and source must differ")
+			}
+		})
+	}
+}
+
+// maliciousPwd embeds ESC-ST (which closes an OSC sequence early) followed by
+// an independent OSC 0 title-set: if Pwd ever stops sanitizing, this reaches
+// the terminal as two escape sequences instead of one opaque payload.
+const maliciousPwd = "evil\x1b\\\x1b]0;PWNED\x07rest"
+
+func TestPwd(t *testing.T) {
+	cases := []struct {
+		Case     string
+		PwdType  string
+		Pwd      string
+		UserName string
+		HostName string
+		Expected string
+	}{
+		{
+			Case:     "OSC7 clean pwd",
+			PwdType:  OSC7,
+			Pwd:      "/home/user/project",
+			HostName: "box",
+			Expected: "\x1b]7;file://box//home/user/project\x1b\\",
+		},
+		{
+			Case:     "OSC7 malicious pwd is sanitized",
+			PwdType:  OSC7,
+			Pwd:      maliciousPwd,
+			HostName: "box",
+			Expected: "\x1b]7;file://box/evil\\]0;PWNEDrest\x1b\\",
+		},
+		{
+			Case:     "OSC51 clean pwd",
+			PwdType:  OSC51,
+			Pwd:      "/home/user/project",
+			UserName: "jan",
+			HostName: "box",
+			Expected: "\x1b]51;Ajan@box:/home/user/project\x1b\\",
+		},
+		{
+			Case:     "OSC51 malicious pwd, user and host are sanitized",
+			PwdType:  OSC51,
+			Pwd:      maliciousPwd,
+			UserName: maliciousPwd,
+			HostName: maliciousPwd,
+			Expected: "\x1b]51;Aevil\\]0;PWNEDrest@evil\\]0;PWNEDrest:evil\\]0;PWNEDrest\x1b\\",
+		},
+		{
+			Case:     "OSC99 clean pwd",
+			PwdType:  OSC99,
+			Pwd:      "/home/user/project",
+			Expected: "\x1b]9;9;/home/user/project\x1b\\",
+		},
+		{
+			Case:     "OSC99 malicious pwd is sanitized",
+			PwdType:  OSC99,
+			Pwd:      maliciousPwd,
+			Expected: "\x1b]9;9;evil\\]0;PWNEDrest\x1b\\",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			Init(shell.GENERIC)
+
+			got := Pwd(tc.PwdType, tc.UserName, tc.HostName, tc.Pwd)
+
+			assert.Equal(t, tc.Expected, got, tc.Case)
+			assert.NotContains(t, got, "\x1b]0;PWNED\x07", tc.Case)
+		})
+	}
+}
+
+func TestSetCursorStyle(t *testing.T) {
+	cases := []struct {
+		Case     string
+		Shell    string
+		Style    string
+		Expected string
+		Plain    bool
+	}{
+		{
+			Case:     "Steady block, generic shell",
+			Shell:    shell.GENERIC,
+			Style:    SteadyBlock,
+			Expected: "\x1b[2 q",
+		},
+		{
+			Case:     "Blinking bar, generic shell",
+			Shell:    shell.GENERIC,
+			Style:    BlinkingBar,
+			Expected: "\x1b[5 q",
+		},
+		{
+			Case:     "Steady underline wrapped for bash readline",
+			Shell:    shell.BASH,
+			Style:    SteadyUnderline,
+			Expected: "\\[\x1b[4 q\\]",
+		},
+		{
+			Case:     "Steady bar wrapped for zsh",
+			Shell:    shell.ZSH,
+			Style:    SteadyBar,
+			Expected: "%{\x1b[6 q%}",
+		},
+		{
+			Case:     "Unknown style renders nothing",
+			Shell:    shell.GENERIC,
+			Style:    "not-a-style",
+			Expected: "",
+		},
+		{
+			Case:     "Default steady, generic shell",
+			Shell:    shell.GENERIC,
+			Style:    DefaultSteady,
+			Expected: "\x1b[0 q\x1b[?12l",
+		},
+		{
+			Case:     "Default blinking wrapped for zsh",
+			Shell:    shell.ZSH,
+			Style:    DefaultBlinking,
+			Expected: "%{\x1b[0 q\x1b[?12h%}",
+		},
+		{
+			Case:     "Plain mode renders nothing",
+			Shell:    shell.GENERIC,
+			Style:    SteadyBlock,
+			Plain:    true,
+			Expected: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			Init(tc.Shell)
+			Plain = tc.Plain
+
+			got := SetCursorStyle(tc.Style)
+
+			assert.Equal(t, tc.Expected, got, tc.Case)
+		})
+	}
+
+	Plain = false
+}
+
+func TestStripControlRunes(t *testing.T) {
+	cases := []struct {
+		Case     string
+		Input    string
+		Expected string
+	}{
+		{
+			Case:     "empty string",
+			Input:    "",
+			Expected: "",
+		},
+		{
+			Case:     "printable unicode is untouched",
+			Input:    "jan @ 世界 café",
+			Expected: "jan @ 世界 café",
+		},
+		{
+			Case:     "C0 and C1 control runes removed",
+			Input:    "evil\x1b\\\x1b]0;PWNED\x07rest",
+			Expected: "evil\\]0;PWNEDrest",
+		},
+		{
+			Case:     "newline removed, unlike isControlRune",
+			Input:    "line1\nline2",
+			Expected: "line1line2",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			got := stripControlRunes(tc.Input)
+
+			assert.Equal(t, tc.Expected, got, tc.Case)
+		})
+	}
+}
