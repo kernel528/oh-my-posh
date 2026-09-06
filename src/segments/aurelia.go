@@ -1,3 +1,4 @@
+//nolint:dupl // react and aurelia are deliberately parallel: identical node-package detection, differing only in package name and version metadata
 package segments
 
 type Aurelia struct {
@@ -9,6 +10,23 @@ func (a *Aurelia) Template() string {
 }
 
 func (a *Aurelia) Enabled() bool {
+	a.loadSpec()
+
+	if !a.hasNodePackage("aurelia") {
+		return false
+	}
+
+	return a.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation.
+func (a *Aurelia) Activation() Activation {
+	a.loadSpec()
+
+	return a.activation()
+}
+
+func (a *Aurelia) loadSpec() {
 	a.extensions = []string{fileName}
 	a.tooling = map[string]*cmd{
 		"aurelia": {
@@ -18,12 +36,6 @@ func (a *Aurelia) Enabled() bool {
 	}
 	a.defaultTooling = []string{"aurelia"}
 	a.versionURLTemplate = "https://github.com/aurelia/aurelia/releases/tag/v{{ .Full }}"
-
-	if !a.hasNodePackage("aurelia") {
-		return false
-	}
-
-	return a.Language.Enabled()
 }
 
 func (a *Aurelia) getVersion() (string, error) {

@@ -25,17 +25,27 @@ func (s *PlasticStatus) add(code string) {
 	}
 }
 
+// plasticStatusFields lists what setPlasticStatus populates: the single
+// probe this segment derives from its templates (see FieldRefs).
+var plasticStatusFields = []string{"Status", "Behind", "MergePending"}
+
 type Plastic struct {
 	Status                 *PlasticStatus
 	Selector               string
 	plasticWorkspaceFolder string
 	Scm
+	FieldRefs
 	Behind       bool
 	MergePending bool
 }
 
 func (p *Plastic) Template() string {
 	return " {{ .Selector }} "
+}
+
+// Activation gates on the workspace marker Enabled searches for.
+func (p *Plastic) Activation() Activation {
+	return Activation{ProjectFiles: []string{".plastic"}}
 }
 
 func (p *Plastic) Enabled() bool {
@@ -53,7 +63,7 @@ func (p *Plastic) Enabled() bool {
 	}
 
 	p.plasticWorkspaceFolder = wkdir.ParentFolder
-	displayStatus := p.options.Bool(FetchStatus, false)
+	displayStatus := p.fetchUnit(plasticStatusFields...)
 	p.setSelector()
 	if displayStatus {
 		p.setPlasticStatus()
@@ -79,7 +89,7 @@ func (p *Plastic) setPlasticStatus() {
 	p.Behind = headChangeset > currentChangeset
 
 	statusFormats := p.options.KeyValueMap(StatusFormats, map[string]string{})
-	p.Status = &PlasticStatus{ScmStatus: ScmStatus{Formats: statusFormats}}
+	p.Status = &PlasticStatus{Formats: statusFormats}
 
 	// parse file state
 	p.MergePending = false

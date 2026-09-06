@@ -73,7 +73,9 @@ func TestGradle(t *testing.T) {
 		},
 	}
 
-	// "No gradle files" — Enabled() returns false without calling gradle at all.
+	// "No gradle files" — the activation gate fails without calling gradle
+	// at all, AND Enabled() on its own (as reached via the Force/pinned-data
+	// gate bypasses) still returns false: it must stay standalone-correct.
 	t.Run("No gradle files in directory", func(t *testing.T) {
 		env := new(mock.Environment)
 		env.On("HasFiles", "*.gradle").Return(false)
@@ -82,9 +84,11 @@ func TestGradle(t *testing.T) {
 		env.On("Pwd").Return("/usr/home/project")
 		env.On("Home").Return("/usr/home")
 
-		props := options.Map{options.FetchVersion: true}
+		props := options.Map{}
 		g := &Gradle{}
 		g.Init(props, env)
+		activation := g.Activation()
+		assert.False(t, activation.Active(env))
 		assert.False(t, g.Enabled())
 	})
 
@@ -133,5 +137,61 @@ func TestGradle(t *testing.T) {
 			assert.Equal(t, tc.ExpectedAnt, g.AntVersion, fmt.Sprintf("Ant in case: %s", tc.Case))
 			assert.Equal(t, tc.ExpectedJVM, g.JVMVersion, fmt.Sprintf("JVM in case: %s", tc.Case))
 		})
+	}
+}
+
+// TestGradleDerivedExtraVersionFields pins the extra-version-fields hook:
+// gradle's Kotlin/Groovy/Ant/JVM versions are populated only inside the
+// gated version fetch, so referencing one of them alone must trigger it -
+// and a template referencing none of the unit's fields must not.
+func TestGradleDerivedExtraVersionFields(t *testing.T) {
+	cases := []struct {
+		Case        string
+		ExpectedJVM string
+		Referenced  []string
+		ExpectFetch bool
+	}{
+		{
+			Case:        "JVMVersion-only template fetches",
+			Referenced:  []string{"JVMVersion"},
+			ExpectedJVM: "21.0.9",
+			ExpectFetch: true,
+		},
+		{
+			Case:       "no version field referenced skips the command",
+			Referenced: []string{"Segment"},
+		},
+	}
+
+	for _, tc := range cases {
+		params := &mockedLanguageParams{
+			cmd:           gradle,
+			versionParam:  "--version",
+			versionOutput: gradleVersionOutput,
+			extension:     "*.gradle",
+		}
+		env, props := getMockedLanguageEnv(params)
+		env.On("HasFiles", "*.gradle.kts").Return(false)
+		env.On("Shell").Return("bash")
+		env.On("HasParentFilePath", "gradlew", false).Return(&runtime.FileInfo{}, errors.New("no match"))
+
+		if template.Cache == nil {
+			template.Cache = &cache.Template{}
+		}
+		template.Init(env, nil, nil)
+
+		g := &Gradle{}
+		g.Init(props, env)
+		g.SetReferencedFields(template.RefSet{Fields: tc.Referenced, Analyzable: true})
+
+		assert.True(t, g.Enabled(), tc.Case)
+		assert.Equal(t, tc.ExpectedJVM, g.JVMVersion, tc.Case)
+
+		if tc.ExpectFetch {
+			env.AssertCalled(t, "RunCommandWithEnv", gradle, []string(nil), []string{"--version"})
+			continue
+		}
+
+		env.AssertNotCalled(t, "RunCommandWithEnv", gradle, []string(nil), []string{"--version"})
 	}
 }

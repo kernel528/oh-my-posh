@@ -125,11 +125,11 @@ func TestOauthResult(t *testing.T) {
 		tokenURL := fmt.Sprintf("https://ohmyposh.dev/api/refresh?segment=test&token=%s", tc.RefreshToken)
 
 		if tc.AccessTokenFromCache {
-			cache.Set(cache.Device, accessTokenKey, tc.AccessToken, cache.INFINITE)
+			cache.Device.Set(accessTokenKey, tc.AccessToken, cache.INFINITE)
 		}
 
 		if tc.RefreshTokenFromCache {
-			cache.Set(cache.Device, refreshTokenKey, tc.RefreshToken, cache.INFINITE)
+			cache.Device.Set(refreshTokenKey, tc.RefreshToken, cache.INFINITE)
 		}
 
 		env := &MockedEnvironment{}
@@ -143,13 +143,11 @@ func TestOauthResult(t *testing.T) {
 			SegmentName:     "test",
 			AccessToken:     tc.AccessToken,
 			RefreshToken:    tc.RefreshToken,
-			Request: Request{
-				Env:         env,
-				HTTPTimeout: 20,
-			},
+			Env:             env,
+			HTTPTimeout:     20,
 		}
 
-		got, err := OauthResult[*data](oauth, url, nil)
+		got, err := oauth.Result[*data](url, nil)
 		assert.Equal(t, tc.ExpectedData, got, tc.Case)
 
 		if tc.ExpectedErrorMessage == "" {
@@ -158,6 +156,6 @@ func TestOauthResult(t *testing.T) {
 			assert.Equal(t, tc.ExpectedErrorMessage, err.Error(), tc.Case)
 		}
 
-		cache.DeleteAll(cache.Device)
+		cache.Device.DeleteAll()
 	}
 }

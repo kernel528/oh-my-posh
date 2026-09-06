@@ -82,9 +82,7 @@ func TestYtdma_Authenticate(t *testing.T) {
 			env.On("HTTPRequest", tokenURL).Return([]byte(tc.requestTokenResponse), tc.requestTokenError)
 
 			ytmda := &Ytmda{
-				model: model{
-					env: env,
-				},
+				env: env,
 			}
 
 			ytmda.Authenticate()
@@ -97,12 +95,12 @@ func TestYtdma_Authenticate(t *testing.T) {
 			}
 
 			if tc.shouldSetToken {
-				token, ok := cache.Get[string](cache.Device, auth.YTMDATOKEN)
+				token, ok := cache.Device.Get[string](auth.YTMDATOKEN)
 				require.True(t, ok)
 				assert.Equal(t, tc.expectedToken, token)
 			}
 
-			cache.DeleteAll(cache.Device)
+			cache.Device.DeleteAll()
 		})
 	}
 }

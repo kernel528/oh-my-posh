@@ -32,10 +32,37 @@ func (p *Python) Template() string {
 }
 
 func (p *Python) Enabled() bool {
+	p.loadSpec()
+
+	return p.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation.
+func (p *Python) Activation() Activation {
+	p.loadSpec()
+
+	return p.activation()
+}
+
+func (p *Python) loadSpec() {
 	p.extensions = []string{"*.py", "*.ipynb", "pyproject.toml", "venv.bak"}
 	p.folders = []string{".venv", "venv", "virtualenv", "venv-win", "pyenv-win"}
+	// the pyenv getVersion overrides Venv with the pyenv-resolved virtualenv
+	// name, so a .Venv-only template must still trigger the fetch to keep
+	// that naming (a slight over-fetch for non-pyenv users, deliberately:
+	// wrong display costs more)
+	p.extraVersionFields = []string{"Venv"}
 
-	// Define all available tooling options for Python
+	// None of this tooling is marked versionCacheable. "pyenv" goes through
+	// getVersion (see pyenvVersion) so the flag would be inert there anyway,
+	// but the deeper reason applies to python/python3/py too: whichever of
+	// them pyenv is managing resolves from PATH to a shim script whose own
+	// path/mtime/size never change while its target version does, per
+	// directory (via .python-version or $PYENV_VERSION) - and there is no
+	// way at cmd-definition time to tell a pyenv shim apart from a real
+	// interpreter that would otherwise be safe to cache. "uv" is unambiguous:
+	// `uv run` resolves the interpreter from the current project's
+	// pyproject.toml/venv, so its output is directory-dependent by design.
 	p.tooling = map[string]*cmd{
 		"pyenv": {
 			getVersion: p.pyenvVersion,
@@ -70,8 +97,13 @@ func (p *Python) Enabled() bool {
 	p.displayMode = p.options.String(DisplayMode, DisplayModeEnvironment)
 	p.Language.loadContext = p.loadContext
 	p.Language.inContext = p.inContext
-
-	return p.Language.Enabled()
+	// The declared triggers for the venv context: with none of these set (and
+	// no matching file or folder in the cwd), the segment gates off without
+	// probing. A venv that is only discoverable through pyvenv.cfg next to
+	// the python executable, with no environment variable exported and no
+	// python files around, no longer activates the segment - an accepted
+	// trade-off for skipping the probe in every unrelated directory.
+	p.contextEnvVars = []string{"VIRTUAL_ENV", "CONDA_ENV_PATH", "CONDA_DEFAULT_ENV"}
 }
 
 func (p *Python) loadContext() {
@@ -83,11 +115,8 @@ func (p *Python) loadContext() {
 		return
 	}
 
-	venvVars := []string{
-		"VIRTUAL_ENV",
-		"CONDA_ENV_PATH",
-		"CONDA_DEFAULT_ENV",
-	}
+	// declared in loadSpec so the activation gate and this lookup stay in sync
+	venvVars := p.contextEnvVars
 
 	folderNameFallback := p.options.Bool(FolderNameFallback, true)
 	defaultVenvNames := p.options.StringArray(DefaultVenvNames, []string{

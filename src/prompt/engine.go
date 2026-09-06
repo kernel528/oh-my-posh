@@ -919,7 +919,7 @@ func New(flags *runtime.Flags) *Engine {
 	env := &runtime.Terminal{}
 	env.Init(flags)
 
-	reload, _ := cache.Get[bool](cache.Device, config.RELOAD)
+	reload, _ := cache.Device.Get[bool](config.RELOAD)
 	cfg := config.Get(flags.ConfigPath, reload)
 
 	return newEngine(cfg, env)
@@ -935,6 +935,15 @@ func newEngine(cfg *config.Config, env runtime.Environment) *Engine {
 	flags := env.Flags()
 
 	template.Init(env, cfg.Var, cfg.Maps)
+
+	// Ensure every segment carries the field set its templates reference
+	// before anything executes: MapSegmentWithWriter hands the sets to
+	// writers that derive their fetches from them (see
+	// config.FieldSetConsumer). Configs from config.Get are already stamped -
+	// the stamps ride along in the session cache's gob payload - so this is a
+	// no-op there; it only analyzes for callers that hand newEngine a config
+	// that never went through Store (tests, library use).
+	cfg.ResolveFieldSets()
 
 	flags.HasExtra = cfg.DebugPrompt != nil ||
 		cfg.SecondaryPrompt != nil ||

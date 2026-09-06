@@ -40,9 +40,7 @@ type AccessTokenResponse struct {
 
 func NewCopilot(env runtime.Environment) *CopilotAuth {
 	flow := &CopilotAuth{
-		model: model{
-			env: env,
-		},
+		env: env,
 	}
 
 	flow.model.status = flow.status
@@ -90,7 +88,7 @@ func (c *CopilotAuth) Authenticate() {
 		return
 	}
 
-	cache.Set(cache.Device, auth.CopilotTokenKey, token, cache.TWOYEARS)
+	cache.Device.Set(auth.CopilotTokenKey, token, cache.TWOYEARS)
 
 	setState(done)
 }

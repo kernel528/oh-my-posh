@@ -12,11 +12,31 @@ func (u *UI5Tooling) Template() string {
 }
 
 func (u *UI5Tooling) Enabled() bool {
+	u.loadSpec()
+
+	return u.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation. The
+// default context mode resolves to Always: the context callback is a
+// depth-limited glob search through parent directories, which no condition
+// kind expresses (ProjectFiles match exact names only).
+func (u *UI5Tooling) Activation() Activation {
+	u.loadSpec()
+
+	return u.activation()
+}
+
+func (u *UI5Tooling) loadSpec() {
 	const ui5ToolName = "ui5"
 
 	u.extensions = []string{UI5ToolingYamlPattern}
 	u.displayMode = u.options.String(DisplayMode, DisplayModeContext)
 	u.tooling = map[string]*cmd{
+		// Not marked versionCacheable: the global @ui5/cli shim delegates to
+		// a project-local node_modules installation when one exists, so the
+		// same binary reports per-project versions its own identity cannot
+		// key.
 		ui5ToolName: {
 			executable: ui5ToolName,
 			args:       []string{versionFlagArg},
@@ -27,8 +47,6 @@ func (u *UI5Tooling) Enabled() bool {
 	u.versionURLTemplate = "https://github.com/SAP/ui5-cli/releases/tag/v{{ .Full }}"
 	u.Language.loadContext = u.loadContext
 	u.Language.inContext = u.inContext
-
-	return u.Language.Enabled()
 }
 
 func (u *UI5Tooling) loadContext() {

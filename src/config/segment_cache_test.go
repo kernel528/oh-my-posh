@@ -42,7 +42,7 @@ func TestSegmentCache(t *testing.T) {
 
 	defer func() {
 		template.Cache = previousTemplateCache
-		cache.DeleteAll(cache.Device)
+		cache.Device.DeleteAll()
 	}()
 
 	env := new(mock.Environment)
@@ -86,11 +86,11 @@ func TestSegmentCache(t *testing.T) {
 		segment := newCachedTextSegment(env, "legacy_segment", Device)
 
 		key, store := segment.cacheKeyAndStore()
-		cache.Set(store, key, "legacy_json_string", cache.Duration("10m"))
+		store.Set(key, "legacy_json_string", cache.Duration("10m"))
 
 		assert.False(t, segment.restoreCache(), "legacy cache should not be restored")
 
-		_, found := cache.Get[string](store, key)
+		_, found := store.Get[string](key)
 		assert.False(t, found, "legacy key should be removed")
 	})
 
@@ -98,11 +98,11 @@ func TestSegmentCache(t *testing.T) {
 		segment := newCachedTextSegment(env, "unexpected_segment", Device)
 
 		key, store := segment.cacheKeyAndStore()
-		cache.Set(store, key, 42, cache.Duration("10m"))
+		store.Set(key, 42, cache.Duration("10m"))
 
 		assert.False(t, segment.restoreCache(), "unexpected cache type should not be restored")
 
-		_, found := cache.Get[int](store, key)
+		_, found := store.Get[int](key)
 		assert.False(t, found, "unexpected key should be removed")
 	})
 }
@@ -116,11 +116,15 @@ func TestGitMainWorktreeRestoresLiveContextLazilyAfterSegmentCacheHit(t *testing
 		adminDir       = commonDir + "/worktrees/linked"
 	)
 
+	// the snapshot source mirrors the executing segment's config exactly:
+	// an unanalyzable segment's cache key fingerprints its raw template
+	// sources, so a differing template would (correctly) miss the cache
 	segmentCache := &Cache{Duration: "5h", Strategy: Session}
 	source := &Segment{
-		Type:  GIT,
-		Alias: alias,
-		Cache: segmentCache,
+		Type:     GIT,
+		Alias:    alias,
+		Cache:    segmentCache,
+		Template: "{{ .MainWorktree }}|{{ .MainWorktree }}",
 		writer: &segments.Git{
 			IsWorkTree: true,
 		},
@@ -128,7 +132,7 @@ func TestGitMainWorktreeRestoresLiveContextLazilyAfterSegmentCacheHit(t *testing
 	source.setCache()
 
 	key, store := source.cacheKeyAndStore()
-	t.Cleanup(func() { cache.Delete(store, key) })
+	t.Cleanup(func() { store.Delete(key) })
 
 	env := newDataReplayEnv(&runtime.Flags{})
 	gitFile := &runtime.FileInfo{

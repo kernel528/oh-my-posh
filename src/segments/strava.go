@@ -19,7 +19,7 @@ type stravaAPI struct {
 
 func (s *stravaAPI) GetActivities() ([]*StravaData, error) {
 	url := "https://www.strava.com/api/v3/athlete/activities?page=1&per_page=1"
-	return http.OauthResult[[]*StravaData](&s.OAuthRequest, url, nil)
+	return s.Result[[]*StravaData](url, nil)
 }
 
 type Strava struct {
@@ -101,10 +101,8 @@ func (s *Strava) initAPI() {
 		SegmentName:     "strava",
 		AccessToken:     s.options.Template(options.AccessToken, "", s),
 		RefreshToken:    s.options.Template(options.RefreshToken, "", s),
-		Request: http.Request{
-			Env:         s.env,
-			HTTPTimeout: s.options.Int(options.HTTPTimeout, options.DefaultHTTPTimeout),
-		},
+		Env:             s.env,
+		HTTPTimeout:     s.options.Int(options.HTTPTimeout, options.DefaultHTTPTimeout),
 	}
 
 	s.api = &stravaAPI{

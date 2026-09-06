@@ -96,6 +96,13 @@ type Config struct {
 	AutoUpgrade             bool `json:"-" toml:"-" yaml:"-"`
 	EnableCursorPositioning bool `json:"enable_cursor_positioning,omitempty" toml:"enable_cursor_positioning,omitempty" yaml:"enable_cursor_positioning,omitempty"`
 	MigrateGlyphs           bool `json:"-" toml:"-" yaml:"-"`
+	// FieldSetsVersion records which analyzer generation stamped this
+	// config's segments with their template field sets (see
+	// fieldSetAnalysisVersion); zero means unstamped. Exported, and kept out
+	// of every config format, so the session cache's gob round trip carries
+	// the marker and restored configs skip re-analysis exactly when their
+	// stamps are current.
+	FieldSetsVersion int `json:"-" toml:"-" yaml:"-"`
 }
 
 func (cfg *Config) MakeColors(env runtime.Environment) color.String {
@@ -129,6 +136,11 @@ func (cfg *Config) getPalette() color.Palette {
 	return palette
 }
 
+// streamingEnabled reports whether streaming should be enabled: it's configured.
+func (cfg *Config) streamingEnabled(_ runtime.Environment) bool {
+	return cfg.Streaming > 0
+}
+
 func (cfg *Config) Features(env runtime.Environment) shell.Features {
 	var feats shell.Features
 
@@ -149,7 +161,7 @@ func (cfg *Config) Features(env runtime.Environment) shell.Features {
 		}
 	}
 
-	if cfg.Streaming > 0 {
+	if cfg.streamingEnabled(env) {
 		log.Debug("streaming enabled")
 		feats |= shell.Streaming
 	}
@@ -235,13 +247,13 @@ func (cfg *Config) upgradeFeatures() shell.Features {
 	var feats shell.Features
 
 	autoUpgrade := cfg.Upgrade.Auto
-	if val, OK := cache.Get[bool](cache.Device, AUTOUPGRADE); OK {
+	if val, OK := cache.Device.Get[bool](AUTOUPGRADE); OK {
 		log.Debug("auto upgrade key found, overriding config")
 		autoUpgrade = val
 	}
 
 	upgradeNotice := cfg.Upgrade.DisplayNotice
-	if val, OK := cache.Get[bool](cache.Device, UPGRADENOTICE); OK {
+	if val, OK := cache.Device.Get[bool](UPGRADENOTICE); OK {
 		log.Debug("upgrade notice key found, overriding config")
 		upgradeNotice = val
 	}
@@ -285,7 +297,7 @@ func (cfg *Config) migrateSegmentProperties() {
 }
 
 func (cfg *Config) toggleSegments() {
-	currentToggleSet, _ := cache.Get[map[string]bool](cache.Session, cache.TOGGLECACHE)
+	currentToggleSet, _ := cache.Session.Get[map[string]bool](cache.TOGGLECACHE)
 	if currentToggleSet == nil {
 		currentToggleSet = make(map[string]bool)
 	}
@@ -304,5 +316,5 @@ func (cfg *Config) toggleSegments() {
 	}
 
 	// Update cache with the map directly
-	cache.Set(cache.Session, cache.TOGGLECACHE, currentToggleSet, cache.INFINITE)
+	cache.Session.Set(cache.TOGGLECACHE, currentToggleSet, cache.INFINITE)
 }

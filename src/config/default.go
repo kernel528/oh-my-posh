@@ -19,8 +19,6 @@ const (
 	// Mirror segment option keys locally rather than importing segments,
 	// which drags its full transitive dep tree into the wasm build.
 	branchTemplate      options.Option = "branch_template"
-	fetchStatus         options.Option = "fetch_status"
-	fetchUpstreamIcon   options.Option = "fetch_upstream_icon"
 	homeEnabled         options.Option = "home_enabled"
 	fetchPackageManager options.Option = "fetch_package_manager"
 	displayMode         options.Option = "display_mode"
@@ -85,9 +83,7 @@ func Default(configError error) *Config {
 							"{{ if gt .Ahead 0 }}p:white{{ end }}",
 						},
 						Options: options.Map{
-							branchTemplate:    "{{ trunc 25 .Branch }}",
-							fetchStatus:       true,
-							fetchUpstreamIcon: true,
+							branchTemplate: "{{ trunc 25 .Branch }}",
 						},
 						Template: " {{ if .UpstreamURL }}{{ url .UpstreamIcon .UpstreamURL }} {{ end }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ end }} ", //nolint:lll
 					},
@@ -137,9 +133,6 @@ func Default(configError error) *Config {
 						Foreground: paletteBlue,
 						Background: backgroundTransparent,
 						Template:   "\ue626 ",
-						Options: options.Map{
-							options.FetchVersion: false,
-						},
 					},
 					{
 						Type:       PYTHON,
@@ -148,9 +141,8 @@ func Default(configError error) *Config {
 						Background: backgroundTransparent,
 						Template:   "\ue235 ",
 						Options: options.Map{
-							options.FetchVersion: false,
-							displayMode:          "files",
-							fetchVirtualEnv:      false,
+							displayMode:     "files",
+							fetchVirtualEnv: false,
 						},
 					},
 					{
@@ -235,6 +227,10 @@ func CopilotCLI() *Config {
 	return statuslineCLIConfig(1234567891, COPILOTCLI, " \uec1e {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }} ")
 }
 
+func Antigravity() *Config {
+	return statuslineCLIConfig(1234567892, ANTIGRAVITY, " \uf135 {{ .Model.DisplayName }} \uf2d0 {{ .TokenGauge }} ")
+}
+
 // The left block is always PATH + GIT; the right block contains a single
 // segment of the given type and template.
 func statuslineCLIConfig(hash uint64, segmentType SegmentType, template string) *Config {
@@ -273,10 +269,6 @@ func statuslineCLIConfig(hash uint64, segmentType SegmentType, template string) 
 						ForegroundTemplates: []string{
 							"{{ if or (.Working.Changed) (.Staging.Changed) }}p:black{{ end }}",
 							"{{ if or (gt .Ahead 0) (gt .Behind 0) }}p:white{{ end }}",
-						},
-						Options: options.Map{
-							fetchStatus:       true,
-							fetchUpstreamIcon: false,
 						},
 						Template: " {{ if .UpstreamURL }}{{ url .UpstreamIcon .UpstreamURL }} {{ end }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ nospace .Working.String }}{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ end }} ", //nolint:lll
 					},

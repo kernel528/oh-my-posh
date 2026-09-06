@@ -15,7 +15,10 @@ the repository's `dist` folder.
 ./build.ps1 -Architecture x64 -Version "1.3.37"
 ```
 
-The package is created at `out/install-x64.msix`.
+The package is created at `out/install-x64.msix`, along with an App Installer
+file at `out/install-x64.appinstaller`. The App Installer configuration is also
+embedded in the MSIX, so installing the MSIX enables automatic updates on
+supported Windows versions.
 
 ## Install the package
 

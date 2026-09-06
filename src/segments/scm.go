@@ -16,6 +16,10 @@ import (
 const (
 	NativeFallback options.Option = "native_fallback"
 	StatusFormats  options.Option = "status_formats"
+
+	// workingField is the template field name shared by every SCM status
+	// unit table below (see FieldRefs).
+	workingField = "Working"
 )
 
 type ScmStatus struct {

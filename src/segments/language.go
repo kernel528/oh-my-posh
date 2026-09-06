@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"path/filepath"
 	runtime_ "runtime"
 
@@ -74,6 +75,14 @@ type cmd struct {
 	versionURLTemplate string
 	args               []string
 	envs               []string
+	// versionCacheable opts this command's raw output into the keyed device
+	// cache (see Language.versionCacheKey): set it only when the output is a
+	// pure function of the resolved executable - its path, mtime and size -
+	// and the exact args, with no cwd file, environment variable, or project
+	// config able to change what that same binary prints. A getVersion-backed
+	// command never reaches the cache regardless of this flag, since the
+	// cache sits in the executable-invocation branch of runCommand.
+	versionCacheable bool
 }
 
 func (c *cmd) parse(versionInfo string) (*Version, error) {
@@ -93,27 +102,64 @@ func (c *cmd) parse(versionInfo string) (*Version, error) {
 	return version, nil
 }
 
+// languageVersionFields lists what the version fetch populates: the
+// embedded Version struct's promoted fields (plus the embedded field name
+// itself), the fetch-path errors, and the version-file mismatch state.
+// setVersion and the mismatch check only run when one of these is
+// referenced; see fetchUnitFailOpen for the fail-open polarity.
+var languageVersionFields = []string{
+	"Version", "Full", "Major", "Minor", "Patch", "Prerelease", "BuildMetadata",
+	"URL", "Executable", "Expected", "Error", "Mismatch",
+}
+
+// versionFields is the version unit's complete field list: the shared
+// languageVersionFields plus whatever the concrete segment declared through
+// extraVersionFields.
+func (l *Language) versionFields() []string {
+	if len(l.extraVersionFields) == 0 {
+		return languageVersionFields
+	}
+
+	fields := make([]string, 0, len(languageVersionFields)+len(l.extraVersionFields))
+	fields = append(fields, languageVersionFields...)
+
+	return append(fields, l.extraVersionFields...)
+}
+
 type Language struct {
 	Base
-
+	tooling            map[string]*cmd
 	projectRoot        *runtime.FileInfo
 	loadContext        loadContext
 	inContext          inContext
 	matchesVersionFile matchesVersionFile
 	Version
-	displayMode        string
+	name               string
 	Error              string
 	versionURLTemplate string
-	name               string
-	commands           []*cmd
-	tooling            map[string]*cmd
-	defaultTooling     []string
+	displayMode        string
 	projectFiles       []string
+	defaultTooling     []string
+	commands           []*cmd
 	folders            []string
 	extensions         []string
-	exitCode           int
-	homeEnabled        bool
-	Mismatch           bool
+	// contextEnvVars declares the environment variables whose presence can
+	// make inContext return true, so environment/context display modes can
+	// gate on them instead of falling back to Always.
+	contextEnvVars []string
+	// contextFiles declares the cwd files inContext reads, same purpose.
+	contextFiles []string
+	// extraVersionFields declares additional template-visible fields this
+	// concrete segment populates inside the gated version fetch (custom
+	// getVersion closures and friends - gradle's JVMVersion, dotnet's
+	// Unsupported, python's pyenv Venv override). Set in the segment's
+	// spec/loadSpec; versionFields appends them to the shared list so
+	// referencing one of them alone still triggers the fetch.
+	extraVersionFields []string
+	FieldRefs
+	exitCode    int
+	homeEnabled bool
+	Mismatch    bool
 }
 
 const (
@@ -142,6 +188,12 @@ func (l *Language) getName() string {
 	return base[:len(base)-3]
 }
 
+// Enabled decides whether the segment renders, and is standalone-correct:
+// it never assumes the activation gate (see activation) ran, because Force
+// and pinned data bypass the gate entirely. The presence checks the gate
+// also evaluates are re-verified here, which is near-free: the directory
+// listing and parent-path searches are memoized per invocation, so the gate
+// remains a pure skip-optimization.
 func (l *Language) Enabled() bool {
 	if l.name == "" {
 		l.name = l.getName()
@@ -161,6 +213,9 @@ func (l *Language) Enabled() bool {
 		return false
 	}
 
+	// Runs the search regardless of the gate: the segment needs the project
+	// root itself (InProjectDir, quasar's dependency fetching), and after a
+	// gate pass the runtime-level HasParentFilePath cache makes it a hit.
 	if len(l.projectFiles) != 0 && l.hasProjectFiles() {
 		enabled = true
 	}
@@ -179,17 +234,27 @@ func (l *Language) Enabled() bool {
 		case DisplayModeEnvironment:
 			enabled = l.inLanguageContext()
 		case DisplayModeFiles:
+			// Re-verified even though a passing gate implies a match: the
+			// gate is a skip-optimization, not a precondition Enabled may
+			// rely on - Force and pinned data bypass it entirely, and the
+			// gate's symlink-following project-file variant can pass where
+			// this segment's own search misses. The re-check is a map hit:
+			// the directory listing and parent-path searches are memoized
+			// per invocation.
 			enabled = l.hasLanguageFiles() || l.hasLanguageFolders()
 		case DisplayModeContext:
 			fallthrough
 		default:
-			enabled = l.hasLanguageFiles() || l.hasLanguageFolders() || l.inLanguageContext() || l.hasProjectFiles()
+			// the gate narrows this down but cannot decide it: a pass via a
+			// declared context trigger (env var, context file) does not
+			// guarantee the context callback agrees
+			enabled = l.hasLanguageFiles() || l.hasLanguageFolders() || l.inLanguageContext()
 		}
 	}
 
 	l.loadTooling()
 
-	if !enabled || !l.options.Bool(options.FetchVersion, true) {
+	if !enabled || !l.fetchUnitFailOpen(l.versionFields()...) {
 		return enabled
 	}
 
@@ -207,6 +272,61 @@ func (l *Language) Enabled() bool {
 	}
 
 	return enabled
+}
+
+// activation backs the Activation() implementation of the concrete language
+// segments. It expresses everything Enabled()'s decision tree can react to
+// as OR'd preconditions: the extension globs and folders of the file check,
+// the project files (searched in parent directories), and the declared
+// triggers of the context callback (contextEnvVars/contextFiles). Where the
+// context callback is opaque - it exists but declares no triggers - the gate
+// falls back to Always so the full Enabled() path decides, exactly as
+// before.
+//
+// Deliberately unexported: promoting an exported Activation() from Language
+// would gate every embedder, including one that only builds its spec inside
+// Enabled() and would therefore be gated against an empty (or incomplete)
+// spec. A concrete segment opts in by defining Activation() itself, building
+// its spec first and then delegating here - the same way its Enabled()
+// builds the spec before delegating to Language.Enabled().
+func (l *Language) activation() Activation {
+	displayMode := l.displayMode
+	if displayMode == "" {
+		displayMode = l.options.String(DisplayMode, DisplayModeFiles)
+	}
+
+	if displayMode == DisplayModeAlways {
+		return Activation{Always: true}
+	}
+
+	activation := Activation{
+		FileGlobs:    l.options.StringArray(LanguageExtensions, l.extensions),
+		Folders:      l.options.StringArray(LanguageFolders, l.folders),
+		ProjectFiles: l.options.StringArray(LanguageProjectFiles, l.projectFiles),
+	}
+
+	if displayMode == DisplayModeFiles {
+		return activation
+	}
+
+	// environment and context modes can also enable through the context
+	// callback; gate on its declared triggers when it has any
+	activation.EnvVars = l.contextEnvVars
+
+	if len(l.contextFiles) != 0 {
+		globs := make([]string, 0, len(activation.FileGlobs)+len(l.contextFiles))
+		globs = append(globs, activation.FileGlobs...)
+		globs = append(globs, l.contextFiles...)
+		activation.FileGlobs = globs
+	}
+
+	if l.inContext != nil && len(l.contextEnvVars) == 0 && len(l.contextFiles) == 0 {
+		// opaque context callback: it can enable the segment through state
+		// the gate cannot see, so there is no gate
+		activation.Always = true
+	}
+
+	return activation
 }
 
 // Users can override the default tooling via the Tooling option (e.g. "uv" for Python to use the UV package manager).
@@ -246,15 +366,28 @@ func (l *Language) InProjectDir() bool {
 }
 
 func (l *Language) hasLanguageFolders() bool {
-	return slices.ContainsFunc(l.folders, l.env.HasFolder)
+	// joined with Pwd, matching the activation gate's folder check, so a
+	// caller whose PWD flag differs from the process cwd cannot get
+	// gate/Enabled divergence
+	return slices.ContainsFunc(l.folders, func(folder string) bool {
+		return l.env.HasFolder(filepath.Join(l.env.Pwd(), folder))
+	})
 }
 
 func (l *Language) setVersion() error {
 	var lastError error
 
+	// This is the legacy, opt-in cache: it only ever stores anything once a
+	// user sets cache_duration (cache.Set is a no-op for the zero/NONE
+	// duration this defaults to, below), and it caches the resolved Version
+	// for the whole segment under a TTL the user picks, not one derived from
+	// what the value depends on. Whether or not it fires, runCommand's keyed
+	// cache below is still consulted per command - that one is the default,
+	// always-on path for the commands that opted into it, and needs no
+	// option to be effective.
 	cacheKey := fmt.Sprintf("version_%s", l.name)
 
-	if versionCache, OK := cache.Get[Version](cache.Device, cacheKey); OK {
+	if versionCache, OK := cache.Device.Get[Version](cacheKey); OK {
 		l.Version = versionCache
 		return nil
 	}
@@ -283,7 +416,7 @@ func (l *Language) setVersion() error {
 		l.Executable = command.executable
 
 		duration := l.options.String(options.CacheDuration, string(cache.NONE))
-		cache.Set(cache.Device, cacheKey, l.Version, cache.Duration(duration))
+		cache.Device.Set(cacheKey, l.Version, cache.Duration(duration))
 
 		return nil
 	}
@@ -301,11 +434,26 @@ func (l *Language) runCommand(command *cmd) (string, error) {
 			return "", errors.New(noVersion)
 		}
 
+		cacheKey, cacheable := l.versionCacheKey(command)
+		if cacheable {
+			if cached, found := cache.Device.Get[string](cacheKey); found {
+				log.Debugf("using cached version output for %s", command.executable)
+				return cached, nil
+			}
+		}
+
 		versionStr, err := l.env.RunCommandWithEnv(command.executable, command.envs, command.args...)
 
 		if exitErr, ok := err.(*runtime.CommandError); ok {
 			l.exitCode = exitErr.ExitCode
 			return "", fmt.Errorf("err executing %s with %v", command.executable, command.args)
+		}
+
+		// Success only: a failed run (a non-CommandError err, or one the
+		// caller above already turned into an early return) never gets
+		// cached, so a transient failure cannot pin a bad result for a week.
+		if err == nil && cacheable {
+			cache.Device.Set(cacheKey, versionStr, cache.ONEWEEK)
 		}
 
 		return versionStr, nil
@@ -321,6 +469,50 @@ func (l *Language) runCommand(command *cmd) (string, error) {
 	}
 
 	return versionStr, nil
+}
+
+// versionCacheKey reports the device-cache key for command's raw output, and
+// whether command is eligible for that cache at all. Eligibility requires:
+// opting in via versionCacheable, an environment that can resolve a real
+// executable identity (DataOnly cannot), and a resolvable, statable
+// executable path.
+//
+// The key mixes the resolved absolute path with the executable's mtime and
+// size, the exact arguments, and any extra environment the command runs
+// with, so a PATH change, a reinstalled or upgraded binary, different args,
+// or different envs all produce a different key and therefore a cache miss -
+// invalidation follows from what the output depends on, not from a guessed
+// TTL. The TTL passed to cache.Set (see runCommand) exists only so a device
+// cache nobody prunes doesn't grow forever; it plays no part in correctness.
+func (l *Language) versionCacheKey(command *cmd) (string, bool) {
+	if !command.versionCacheable || l.env.Flags().DataOnly {
+		return "", false
+	}
+
+	path := l.env.CommandPath(command.executable)
+	if path == "" {
+		return "", false
+	}
+
+	stat, err := l.env.StatFile(path)
+	if err != nil {
+		return "", false
+	}
+
+	h := fnv.New64a()
+	fmt.Fprintf(h, "%s\x00%d\x00%d", path, stat.ModTime, stat.Size)
+
+	for _, arg := range command.args {
+		fmt.Fprintf(h, "\x00%s", arg)
+	}
+
+	// No cacheable cmd sets envs today, but the key must not silently
+	// under-specify one that does: the output can depend on them.
+	for _, env := range command.envs {
+		fmt.Fprintf(h, "\x00env:%s", env)
+	}
+
+	return fmt.Sprintf("version_%x", h.Sum64()), true
 }
 
 func (l *Language) loadLanguageContext() {

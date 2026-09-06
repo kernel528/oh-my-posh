@@ -4,9 +4,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/constants"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -93,8 +95,7 @@ func TestDotnetSDKVersion(t *testing.T) {
 
 	for _, tc := range cases {
 		props := options.Map{
-			FetchSDKVersion:      tc.FetchSDK,
-			options.FetchVersion: false,
+			FetchSDKVersion: tc.FetchSDK,
 		}
 
 		env, _ := getMockedLanguageEnv(params)
@@ -111,6 +112,8 @@ func TestDotnetSDKVersion(t *testing.T) {
 
 		dotnet := &Dotnet{}
 		dotnet.Init(props, env)
+		// this test pins SDK-version resolution only, no version fetch
+		setVersionRefs(dotnet, false)
 
 		assert.True(t, dotnet.Enabled(), tc.Case)
 		assert.Equal(t, tc.ExpectedSDK, dotnet.SDKVersion, tc.Case)
@@ -138,4 +141,32 @@ func TestDotnetSegmentSuppressesTelemetry(t *testing.T) {
 		[]string{"DOTNET_CLI_TELEMETRY_OPTOUT=1"},
 		[]string{"--version"},
 	)
+}
+
+// TestDotnetUnsupportedOnlyTemplateFetches pins Unsupported as part of the
+// derived version unit: it derives from the gated fetch's exit code, so a
+// template showing only the unsupported warning must still run the fetch.
+func TestDotnetUnsupportedOnlyTemplateFetches(t *testing.T) {
+	params := &mockedLanguageParams{
+		cmd:           "dotnet",
+		versionParam:  "--version",
+		versionOutput: "8.0.100",
+		extension:     "*.cs",
+		envs:          []string{"DOTNET_CLI_TELEMETRY_OPTOUT=1"},
+	}
+	env, props := getMockedLanguageEnv(params)
+
+	// the fetch renders the version URL template, which needs the pool
+	env.On("Shell").Return("bash")
+	if template.Cache == nil {
+		template.Cache = &cache.Template{}
+	}
+	template.Init(env, nil, nil)
+
+	dotnet := &Dotnet{}
+	dotnet.Init(props, env)
+	dotnet.SetReferencedFields(template.RefSet{Fields: []string{"Unsupported"}, Analyzable: true})
+
+	assert.True(t, dotnet.Enabled())
+	env.AssertCalled(t, "RunCommandWithEnv", "dotnet", []string{"DOTNET_CLI_TELEMETRY_OPTOUT=1"}, []string{"--version"})
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -63,15 +64,13 @@ func TestSvnTemplateString(t *testing.T) {
 				Branch:  "trunk",
 				BaseRev: 2,
 				Working: &SvnStatus{
-					ScmStatus: ScmStatus{
-						Untracked:  9,
-						Added:      2,
-						Conflicted: 1,
-						Deleted:    7,
-						Modified:   3,
-						Moved:      13,
-						Unmerged:   5,
-					},
+					Untracked:  9,
+					Added:      2,
+					Conflicted: 1,
+					Deleted:    7,
+					Modified:   3,
+					Moved:      13,
+					Unmerged:   5,
 				},
 			},
 		},
@@ -91,10 +90,8 @@ func TestSvnTemplateString(t *testing.T) {
 			Svn: &Svn{
 				Branch: "trunk",
 				Working: &SvnStatus{
-					ScmStatus: ScmStatus{
-						Added:    2,
-						Modified: 3,
-					},
+					Added:    2,
+					Modified: 3,
 				},
 			},
 		},
@@ -124,10 +121,8 @@ func TestSvnTemplateString(t *testing.T) {
 				Branch:  "trunk",
 				BaseRev: 2,
 				Working: &SvnStatus{
-					ScmStatus: ScmStatus{
-						Added:    2,
-						Modified: 3,
-					},
+					Added:    2,
+					Modified: 3,
 				},
 			},
 		},
@@ -139,23 +134,20 @@ func TestSvnTemplateString(t *testing.T) {
 				Branch:  "trunk",
 				BaseRev: 2,
 				Working: &SvnStatus{
-					ScmStatus: ScmStatus{
-						Added:      2,
-						Modified:   3,
-						Conflicted: 7,
-					},
+					Added:      2,
+					Modified:   3,
+					Conflicted: 7,
 				},
 			},
 		},
 	}
 
 	for _, tc := range cases {
-		props := options.Map{
-			FetchStatus: true,
-		}
 		env := new(mock.Environment)
 		tc.Svn.env = env
-		tc.Svn.options = props
+		tc.Svn.options = options.Map{}
+		// the status probe is derived from template references now
+		tc.Svn.SetReferencedFields(template.RefSet{Fields: svnStatusFields, Analyzable: true})
 		assert.Equal(t, tc.Expected, renderTemplate(env, tc.Template, tc.Svn), tc.Case)
 	}
 }
@@ -182,15 +174,14 @@ D       FileMarkedAs.Deleted
 M       Modified.File
 C       Conflicted.File
 R       Moved.File`,
-			ExpectedWorking: &SvnStatus{ScmStatus: ScmStatus{
+			ExpectedWorking: &SvnStatus{
 				Modified:   1,
 				Added:      1,
 				Deleted:    1,
 				Moved:      2,
 				Untracked:  1,
 				Conflicted: 1,
-				Formats:    map[string]string{},
-			}},
+				Formats:    map[string]string{}},
 			RefOutput:         "1133",
 			ExpectedRef:       1133,
 			BranchOutput:      "^/trunk",
@@ -201,21 +192,20 @@ R       Moved.File`,
 		{
 			Case:         "conflict",
 			StatusOutput: `C       build.cake`,
-			ExpectedWorking: &SvnStatus{ScmStatus: ScmStatus{
+			ExpectedWorking: &SvnStatus{
 				Conflicted: 1,
-				Formats:    map[string]string{},
-			}},
+				Formats:    map[string]string{}},
 			ExpectedChanged:   true,
 			ExpectedConflicts: true,
 		},
 		{
 			Case:            "no change",
-			ExpectedWorking: &SvnStatus{ScmStatus: ScmStatus{Formats: map[string]string{}}},
+			ExpectedWorking: &SvnStatus{Formats: map[string]string{}},
 			ExpectedChanged: false,
 		},
 		{
 			Case:            "not an integer ref",
-			ExpectedWorking: &SvnStatus{ScmStatus: ScmStatus{Formats: map[string]string{}}},
+			ExpectedWorking: &SvnStatus{Formats: map[string]string{}},
 			ExpectedChanged: false,
 			RefOutput:       "not an integer",
 		},
@@ -238,16 +228,12 @@ R       Moved.File`,
 		env.On("RunCommand", "svn", []string{"info", "", "--show-item", "relative-url"}).Return(tc.BranchOutput, nil)
 		env.On("RunCommand", "svn", []string{"status", ""}).Return(tc.StatusOutput, nil)
 
-		props := options.Map{
-			FetchStatus: true,
-		}
-
 		s := &Svn{
-			Scm: Scm{
-				command: SVNCOMMAND,
-			},
+			command: SVNCOMMAND,
 		}
-		s.Init(props, env)
+		s.Init(options.Map{}, env)
+		// the status probe is derived from template references now
+		s.SetReferencedFields(template.RefSet{Fields: svnStatusFields, Analyzable: true})
 
 		s.setSvnStatus()
 		if tc.ExpectedWorking == nil {
@@ -293,9 +279,7 @@ func TestRepo(t *testing.T) {
 		env.On("RunCommand", "svn", []string{"info", "", "--show-item", "repos-root-url"}).Return(tc.Repo, nil)
 
 		s := &Svn{
-			Scm: Scm{
-				command: SVNCOMMAND,
-			},
+			command: SVNCOMMAND,
 		}
 		s.Init(options.Map{}, env)
 

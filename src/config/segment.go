@@ -5,8 +5,10 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,26 +81,41 @@ type Segment struct {
 	Needs                  []string       `json:"-" toml:"-" yaml:"-"`
 	ForegroundTemplates    template.List  `json:"foreground_templates,omitempty" toml:"foreground_templates,omitempty" yaml:"foreground_templates,omitempty"`
 	pendingData            json.RawMessage
-	Index                  int           `json:"index,omitempty" toml:"index,omitempty" yaml:"index,omitempty"`
-	MinWidth               int           `json:"min_width,omitempty" toml:"min_width,omitempty" yaml:"min_width,omitempty"`
-	Duration               time.Duration `json:"-" toml:"-" yaml:"-"`
-	NameLength             int           `json:"-" toml:"-" yaml:"-"`
-	MaxWidth               int           `json:"max_width,omitempty" toml:"max_width,omitempty" yaml:"max_width,omitempty"`
-	Timeout                int           `json:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty"`
-	Newline                bool          `json:"newline,omitempty" toml:"newline,omitempty" yaml:"newline,omitempty"`
-	Enabled                bool          `json:"-" toml:"-" yaml:"-"`
-	InvertPowerline        bool          `json:"invert_powerline,omitempty" toml:"invert_powerline,omitempty" yaml:"invert_powerline,omitempty"`
-	Force                  bool          `json:"force,omitempty" toml:"force,omitempty" yaml:"force,omitempty"`
-	restored               bool          `json:"-" toml:"-" yaml:"-"`
-	Toggled                bool          `json:"toggled,omitempty" toml:"toggled,omitempty" yaml:"toggled,omitempty"`
-	Pending                bool          `json:"-" toml:"-" yaml:"-"`
-	Killed                 bool          `json:"-" toml:"-" yaml:"-"`
-	Interactive            bool          `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
-	MultilineKeepPrompt    bool          `json:"multiline_keepprompt,omitempty" toml:"multiline_keepprompt,omitempty" yaml:"multiline_keepprompt,omitempty"`
-	foregroundResolved     bool
-	backgroundResolved     bool
-	needsEvaluated         bool
-	evaluated              bool
+	// ReferencedFields is the sorted, analysis-derived set of top-level fields
+	// the config's templates can read from this segment, stamped by
+	// Config.ResolveFieldSets and only trustworthy when FieldsAnalyzable is
+	// true; see FieldSetConsumer. Exported (but kept out of every config
+	// format, like Needs) so the session cache's gob round trip preserves
+	// the analysis instead of forcing a re-run on every render.
+	ReferencedFields []string `json:"-" toml:"-" yaml:"-"`
+	// HeuristicSources is the whole-config text corpus the fallback
+	// heuristic scans when FieldsAnalyzable is false - stamped (and
+	// gob-persisted) because the reference that defeated the analysis can
+	// live outside this segment, in texts the segment cannot reconstruct
+	// from its own fields. Nil for analyzable segments and for configs that
+	// never went through ResolveFieldSets.
+	HeuristicSources    []string      `json:"-" toml:"-" yaml:"-"`
+	Index               int           `json:"index,omitempty" toml:"index,omitempty" yaml:"index,omitempty"`
+	MinWidth            int           `json:"min_width,omitempty" toml:"min_width,omitempty" yaml:"min_width,omitempty"`
+	Duration            time.Duration `json:"-" toml:"-" yaml:"-"`
+	NameLength          int           `json:"-" toml:"-" yaml:"-"`
+	MaxWidth            int           `json:"max_width,omitempty" toml:"max_width,omitempty" yaml:"max_width,omitempty"`
+	Timeout             int           `json:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Newline             bool          `json:"newline,omitempty" toml:"newline,omitempty" yaml:"newline,omitempty"`
+	Enabled             bool          `json:"-" toml:"-" yaml:"-"`
+	InvertPowerline     bool          `json:"invert_powerline,omitempty" toml:"invert_powerline,omitempty" yaml:"invert_powerline,omitempty"`
+	Force               bool          `json:"force,omitempty" toml:"force,omitempty" yaml:"force,omitempty"`
+	restored            bool          `json:"-" toml:"-" yaml:"-"`
+	Toggled             bool          `json:"toggled,omitempty" toml:"toggled,omitempty" yaml:"toggled,omitempty"`
+	Pending             bool          `json:"-" toml:"-" yaml:"-"`
+	Killed              bool          `json:"-" toml:"-" yaml:"-"`
+	Interactive         bool          `json:"interactive,omitempty" toml:"interactive,omitempty" yaml:"interactive,omitempty"`
+	MultilineKeepPrompt bool          `json:"multiline_keepprompt,omitempty" toml:"multiline_keepprompt,omitempty" yaml:"multiline_keepprompt,omitempty"`
+	foregroundResolved  bool
+	backgroundResolved  bool
+	needsEvaluated      bool
+	evaluated           bool
+	FieldsAnalyzable    bool `json:"-" toml:"-" yaml:"-"`
 }
 
 // A nil presentFields map means presence was never recorded, in which case every
@@ -232,6 +249,22 @@ func (segment *Segment) Execute(env runtime.Environment) {
 		return
 	}
 
+	if !segment.gateActive() {
+		if segment.FallbackTemplate != "" {
+			// Contract change (deliberate): a fallback template used to force
+			// the full Enabled() evaluation so it could render against the
+			// evaluated writer. Now the gate wins: the segment counts as
+			// evaluated without Enabled() ever running, and the fallback
+			// renders against the zero-state writer.
+			segment.evaluated = true
+			log.Debugf("segment gated (inactive), fallback renders against zero state: %s", segment.Name())
+			return
+		}
+
+		log.Debugf("segment gated (inactive): %s", segment.Name())
+		return
+	}
+
 	defer func() {
 		if segment.Enabled {
 			template.Cache.AddSegmentData(segment.Name(), segment.templateContext())
@@ -273,6 +306,32 @@ func (segment *Segment) Execute(env runtime.Environment) {
 	segment.evaluated = true
 
 	segment.overlayData()
+}
+
+// gateActive evaluates the writer's activation gate: a cheap, declarative
+// pre-check that proves a segment cannot possibly be enabled in the current
+// working directory, letting Execute skip the (potentially expensive)
+// writer.Enabled() probe entirely. Activation() is part of the SegmentWriter
+// contract; writers inherit the ungated (Always) default from segments.Base.
+//
+// Two segment shapes bypass the gate and run the full path regardless of its
+// outcome: forced segments (Force), and segments pinned via a hand-written
+// data file (pendingData), whose overlay expects writer.Enabled() to derive
+// live state first. A nil writer (the js/wasm build) has no gate to consult.
+// Deliberately not bypassed: a segment with a cache config whose restore
+// missed gates like any other - the next cache fill simply waits until the
+// segment can activate again.
+func (segment *Segment) gateActive() bool {
+	if segment.Force || len(segment.pendingData) > 0 {
+		return true
+	}
+
+	if segment.writer == nil {
+		return true
+	}
+
+	activation := segment.writer.Activation()
+	return activation.Active(segment.env)
 }
 
 // overlayData applies data pinned in a hand-written (unmarked) file on top of the
@@ -499,7 +558,7 @@ func (segment *Segment) Writer() SegmentWriter {
 }
 
 func (segment *Segment) isToggled() bool {
-	togglesMap, OK := cache.Get[map[string]bool](cache.Session, cache.TOGGLECACHE)
+	togglesMap, OK := cache.Session.Get[map[string]bool](cache.TOGGLECACHE)
 	if !OK || len(togglesMap) == 0 {
 		log.Debug("no toggles found")
 		return false
@@ -520,7 +579,7 @@ func (segment *Segment) restoreCache() bool {
 
 	key, store := segment.cacheKeyAndStore()
 
-	data, OK := cache.Get[any](store, key)
+	data, OK := store.Get[any](key)
 	if !OK {
 		log.Debugf("no cache found for segment: %s, key: %s", segment.Name(), key)
 		return false
@@ -534,17 +593,17 @@ func (segment *Segment) restoreCache() bool {
 		// any method relying on it panics after a restore.
 		if err := gob.NewDecoder(bytes.NewReader(v)).Decode(segment.writer); err != nil {
 			log.Error(err)
-			cache.Delete(store, key)
+			store.Delete(key)
 			return false
 		}
 	case string:
 		// legacy JSON cache entry, remove it so it gets re-cached in the new format
 		log.Debugf("removing legacy cache key: %s", key)
-		cache.Delete(store, key)
+		store.Delete(key)
 		return false
 	default:
 		log.Debugf("unexpected cache type for segment: %s, key: %s", segment.Name(), key)
-		cache.Delete(store, key)
+		store.Delete(key)
 		return false
 	}
 
@@ -752,21 +811,60 @@ func (segment *Segment) setCache() {
 	}
 
 	key, store := segment.cacheKeyAndStore()
-	cache.Set(store, key, data.Bytes(), segment.Cache.Duration)
+	store.Set(key, data.Bytes(), segment.Cache.Duration)
 }
 
 func (segment *Segment) cacheKeyAndStore() (string, cache.Store) {
+	name := segment.Name()
+
+	// A field-set consuming writer fetches different data per referenced-field
+	// set, so a gob snapshot taken under one set must never be restored under
+	// another: fold the set's fingerprint into the key. Every other writer
+	// keeps its key untouched.
+	if _, ok := segment.writer.(FieldSetConsumer); ok {
+		name = strings.Join([]string{name, segment.fieldSetFingerprint()}, "_")
+	}
+
 	format := "segment_cache_%s"
 	switch segment.Cache.Strategy {
 	case Session:
-		return fmt.Sprintf(format, segment.Name()), cache.Session
+		return fmt.Sprintf(format, name), cache.Session
 	case Device:
-		return fmt.Sprintf(format, segment.Name()), cache.Device
+		return fmt.Sprintf(format, name), cache.Device
 	case Folder:
 		fallthrough
 	default:
-		return fmt.Sprintf(format, strings.Join([]string{segment.Name(), segment.folderKey()}, "_")), cache.Device
+		return fmt.Sprintf(format, strings.Join([]string{name, segment.folderKey()}, "_")), cache.Device
 	}
+}
+
+// fieldSetFingerprint condenses the stamped field set (and whether it is
+// trustworthy) into a short stable token for the segment cache key.
+// ReferencedFields is sorted by ResolveFieldSets, so equal sets always
+// fingerprint identically. An unanalyzable set fetches by the heuristic
+// over the raw sources instead, so those sources join the fingerprint -
+// two configs with identical (empty) field sets but different templated
+// content must never share a snapshot.
+func (segment *Segment) fieldSetFingerprint() string {
+	h := fnv.New64a()
+
+	if segment.FieldsAnalyzable {
+		_, _ = h.Write([]byte{1})
+	}
+
+	for _, field := range segment.ReferencedFields {
+		_, _ = h.Write([]byte(field))
+		_, _ = h.Write([]byte{0})
+	}
+
+	if !segment.FieldsAnalyzable {
+		for _, source := range segment.fallbackSources() {
+			_, _ = h.Write([]byte(source))
+			_, _ = h.Write([]byte{0})
+		}
+	}
+
+	return strconv.FormatUint(h.Sum64(), 36)
 }
 
 func (segment *Segment) folderKey() string {

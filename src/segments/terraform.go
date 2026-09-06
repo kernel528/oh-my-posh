@@ -14,11 +14,17 @@ const (
 	Command options.Option = "command"
 )
 
+// terraformVersionFields lists what the version fetch populates: the single
+// derived unit of this segment (see FieldRefs). Default-off historically,
+// so the unanalyzable fallback narrows by the substring heuristic like the
+// SCM units, unlike the language segments' fail-open version fetch.
+var terraformVersionFields = []string{"Version"}
+
 type Terraform struct {
 	Base
-
 	TerraformBlock
 	WorkspaceName string
+	FieldRefs
 }
 
 func (tf *Terraform) Template() string {
@@ -29,9 +35,55 @@ type TerraformBlock struct {
 	Version *string `json:"terraform_version"`
 }
 
+// contextConditions returns the folders and file globs whose presence puts
+// the segment in context, shared between the activation gate and inContext
+// so the two can never diverge.
+func (tf *Terraform) contextConditions(fetchVersion bool) (folders, globs []string) {
+	folders = []string{".terraform"}
+	globs = []string{".tf", ".tfplan", ".tfstate"}
+
+	if fetchVersion {
+		_, tenvVersionFile := tf.tenvSources()
+		globs = append(globs, "versions.tf", "main.tf", "terraform.tfstate", tenvVersionFile)
+	}
+
+	return folders, globs
+}
+
+// Activation gates on the context conditions: the segment can only activate
+// when the cwd carries the .terraform folder or one of the files the
+// context check reacts to.
+// The reference set is delivered right after Init, before the engine
+// consults the gate, so the version-file conditions join exactly when the
+// version fetch is derived on.
+func (tf *Terraform) Activation() Activation {
+	folders, globs := tf.contextConditions(tf.fetchUnit(terraformVersionFields...))
+
+	return Activation{
+		Folders:   folders,
+		FileGlobs: globs,
+	}
+}
+
+// inContext re-verifies the context conditions even though a passing gate
+// implies a match: Force and pinned data bypass the gate, so Enabled must
+// stay standalone-correct. The re-check hits the memoized directory listing
+// and stat results.
+func (tf *Terraform) inContext(fetchVersion bool) bool {
+	folders, globs := tf.contextConditions(fetchVersion)
+
+	for _, folder := range folders {
+		if tf.env.HasFolder(filepath.Join(tf.env.Pwd(), folder)) {
+			return true
+		}
+	}
+
+	return slices.ContainsFunc(globs, tf.env.HasFiles)
+}
+
 func (tf *Terraform) Enabled() bool {
 	cmd := tf.options.String(Command, "terraform")
-	fetchVersion := tf.options.Bool(options.FetchVersion, false)
+	fetchVersion := tf.fetchUnit(terraformVersionFields...)
 
 	if !tf.env.HasCommand(cmd) || !tf.inContext(fetchVersion) {
 		return false
@@ -91,27 +143,6 @@ func (tf *Terraform) setVersionFromTenv() bool {
 
 	tf.Version = &version
 	return true
-}
-
-func (tf *Terraform) inContext(fetchVersion bool) bool {
-	terraformFolder := filepath.Join(tf.env.Pwd(), ".terraform")
-
-	if tf.env.HasFolder(terraformFolder) {
-		return true
-	}
-
-	files := []string{".tf", ".tfplan", ".tfstate"}
-	if slices.ContainsFunc(files, tf.env.HasFiles) {
-		return true
-	}
-
-	if !fetchVersion {
-		return false
-	}
-
-	_, tenvVersionFile := tf.tenvSources()
-	versionFiles := []string{"versions.tf", "main.tf", "terraform.tfstate", tenvVersionFile}
-	return slices.ContainsFunc(versionFiles, tf.env.HasFiles)
 }
 
 func (tf *Terraform) setVersionFromTfFiles() error {

@@ -3779,7 +3779,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/3277076?v=4",
       "profile": "https://github.com/e-kulikov",
       "contributions": [
-        "code"
+        "code",
+        "doc"
       ]
     },
     {
@@ -3798,6 +3799,33 @@
       "profile": "https://ezquieldev.vercel.app/",
       "contributions": [
         "doc"
+      ]
+    },
+    {
+      "login": "NotAFlightRisk",
+      "name": "Iain",
+      "avatar_url": "https://avatars.githubusercontent.com/u/23277273?v=4",
+      "profile": "http://peng.ly",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "TheLocehiliosan",
+      "name": "Tim Byrne",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1503609?v=4",
+      "profile": "https://hachyderm.io/@thelocehiliosan",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "fastfinge",
+      "name": "Samuel Proulx",
+      "avatar_url": "https://avatars.githubusercontent.com/u/32251258?v=4",
+      "profile": "https://stuff.interfree.ca",
+      "contributions": [
+        "code"
       ]
     }
   ],

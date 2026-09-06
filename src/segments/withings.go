@@ -126,7 +126,7 @@ func (w *withingsAPI) getWithingsData(endpoint string, formData url.Values) (*Wi
 
 	body := strings.NewReader(formData.Encode())
 
-	data, err := http.OauthResult[*WithingsData](w.OAuthRequest, endpoint, body, modifiers)
+	data, err := w.Result[*WithingsData](endpoint, body, modifiers)
 	if data != nil && data.Status != 0 {
 		return nil, errors.New("Withings API error: " + strconv.Itoa(data.Status))
 	}
@@ -179,10 +179,8 @@ func (w *Withings) initAPI() {
 		SegmentName:     "withings",
 		AccessToken:     w.options.Template(options.AccessToken, "", w),
 		RefreshToken:    w.options.Template(options.RefreshToken, "", w),
-		Request: http.Request{
-			Env:         w.env,
-			HTTPTimeout: w.options.Int(options.HTTPTimeout, options.DefaultHTTPTimeout),
-		},
+		Env:             w.env,
+		HTTPTimeout:     w.options.Int(options.HTTPTimeout, options.DefaultHTTPTimeout),
 	}
 
 	w.api = &withingsAPI{

@@ -35,9 +35,7 @@
           "foreground": "#000000",
           "powerline_symbol": "\ue0b0",
           "options": {
-            "branch_icon": "\uf126 ",
-            "fetch_status": true,
-            "fetch_upstream_icon": true
+            "branch_icon": "\uf126 "
           },
           "style": "powerline",
           "template": " {{ .UpstreamIcon }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ end }}{{ if and (.Working.Changed) (.Staging.Changed) }} |{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }} \ueb4b {{ .StashCount }}{{ end }} ",
@@ -54,9 +52,6 @@
           "foreground": "#ffffff",
           "invert_powerline": true,
           "powerline_symbol": "\ue0b2",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }} \ue718 ",
           "type": "node"
@@ -66,9 +61,6 @@
           "foreground": "#111111",
           "invert_powerline": true,
           "powerline_symbol": "\ue0b2",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} \ue627 ",
           "type": "go"
@@ -78,9 +70,6 @@
           "foreground": "#111111",
           "invert_powerline": true,
           "powerline_symbol": "\ue0b2",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} \ue624 ",
           "type": "julia"
@@ -104,8 +93,7 @@
           "invert_powerline": true,
           "powerline_symbol": "\ue0b2",
           "options": {
-            "display_mode": "files",
-            "fetch_version": true
+            "display_mode": "files"
           },
           "style": "powerline",
           "template": " {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} \ue791 ",
@@ -117,8 +105,7 @@
           "invert_powerline": true,
           "powerline_symbol": "\ue0b2",
           "options": {
-            "display_mode": "files",
-            "fetch_version": false
+            "display_mode": "files"
           },
           "style": "powerline",
           "template": " {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} \uf0e7",

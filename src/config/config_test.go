@@ -96,9 +96,7 @@ func TestGetPalette(t *testing.T) {
 		env.On("Shell").Return("bash")
 
 		template.Cache = &cache.Template{
-			SimpleTemplate: cache.SimpleTemplate{
-				Shell: "bash",
-			},
+			Shell: "bash",
 		}
 		template.Init(env, nil, nil)
 
@@ -149,15 +147,44 @@ func TestFeaturesShellIntegration(t *testing.T) {
 		env.On("Shell").Return(tc.Shell)
 
 		template.Cache = &cache.Template{
-			SimpleTemplate: cache.SimpleTemplate{
-				Shell: tc.Shell,
-			},
+			Shell: tc.Shell,
 		}
 		template.Init(env, nil, nil)
 
 		cfg := &Config{
 			ShellIntegration: tc.ShellIntegration,
 			Upgrade:          &upgrade.Config{},
+		}
+
+		got := cfg.Features(env)
+		assert.Equal(t, tc.ExpectedFeats, got, tc.Case)
+	}
+}
+
+func TestFeaturesStreaming(t *testing.T) {
+	cases := []struct {
+		Case          string
+		Streaming     int
+		ExpectedFeats shell.Features
+	}{
+		{
+			Case:          "streaming enabled",
+			Streaming:     100,
+			ExpectedFeats: shell.Streaming | shell.KeyHandlers,
+		},
+		{
+			Case:          "streaming not configured",
+			ExpectedFeats: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		env := &mock.Environment{}
+		env.On("Shell").Return(shell.PWSH)
+
+		cfg := &Config{
+			Streaming: tc.Streaming,
+			Upgrade:   &upgrade.Config{},
 		}
 
 		got := cfg.Features(env)
@@ -229,9 +256,7 @@ func TestFeaturesVIMode(t *testing.T) {
 		env.On("Shell").Return(tc.Shell)
 
 		template.Cache = &cache.Template{
-			SimpleTemplate: cache.SimpleTemplate{
-				Shell: tc.Shell,
-			},
+			Shell: tc.Shell,
 		}
 		template.Init(env, nil, nil)
 
@@ -298,15 +323,15 @@ func TestUpgradeFeatures(t *testing.T) {
 
 	for _, tc := range cases {
 		if tc.UpgradeCacheKeyExists {
-			cache.Set(cache.Device, upgrade.CACHEKEY, "", cache.INFINITE)
+			cache.Device.Set(upgrade.CACHEKEY, "", cache.INFINITE)
 		}
 
 		if tc.AutoUpgradeKey {
-			cache.Set(cache.Device, AUTOUPGRADE, true, cache.INFINITE)
+			cache.Device.Set(AUTOUPGRADE, true, cache.INFINITE)
 		}
 
 		if tc.NoticeKey {
-			cache.Set(cache.Device, UPGRADENOTICE, true, cache.INFINITE)
+			cache.Device.Set(UPGRADENOTICE, true, cache.INFINITE)
 		}
 
 		cfg := &Config{
@@ -320,6 +345,6 @@ func TestUpgradeFeatures(t *testing.T) {
 		got := cfg.upgradeFeatures()
 		assert.Equal(t, tc.ExpectedFeats, got, tc.Case)
 
-		cache.DeleteAll(cache.Device)
+		cache.Device.DeleteAll()
 	}
 }

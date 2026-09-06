@@ -38,9 +38,7 @@
           "leading_diamond": "\ue0b6",
           "powerline_symbol": "\ue0b0",
           "options": {
-            "branch_template": "{{ trunc 25 .Branch }}",
-            "fetch_status": true,
-            "fetch_upstream_icon": true
+            "branch_template": "{{ trunc 25 .Branch }}"
           },
           "style": "powerline",
           "template": " {{ .UpstreamIcon }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ end }}{{ if and (.Working.Changed) (.Staging.Changed) }} |{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }} \ueb4b {{ .StashCount }}{{ end }} ",
@@ -51,9 +49,6 @@
           "background": "#6CA35E",
           "foreground": "#ffffff",
           "powerline_symbol": "\ue0b0",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " \ue718 {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }} ",
           "type": "node"
@@ -62,9 +57,6 @@
           "background": "#8ED1F7",
           "foreground": "#111111",
           "powerline_symbol": "\ue0b0",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " \ue626 {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} ",
           "type": "go"
@@ -73,9 +65,6 @@
           "background": "#4063D8",
           "foreground": "#111111",
           "powerline_symbol": "\ue0b0",
-          "options": {
-            "fetch_version": true
-          },
           "style": "powerline",
           "template": " \ue624 {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} ",
           "type": "julia"
@@ -97,8 +86,7 @@
           "foreground": "#ffffff",
           "powerline_symbol": "\ue0b0",
           "options": {
-            "display_mode": "files",
-            "fetch_version": true
+            "display_mode": "files"
           },
           "style": "powerline",
           "template": " \ue791 {{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} ",
@@ -109,8 +97,7 @@
           "foreground": "#ffffff",
           "powerline_symbol": "\ue0b0",
           "options": {
-            "display_mode": "files",
-            "fetch_version": false
+            "display_mode": "files"
           },
           "style": "powerline",
           "template": " \uf0e7{{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }} ",

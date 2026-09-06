@@ -6,6 +6,7 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -265,13 +266,11 @@ func TestPlasticParseSmartbranchSelector(t *testing.T) {
 func TestPlasticStatus(t *testing.T) {
 	p := &Plastic{
 		Status: &PlasticStatus{
-			ScmStatus: ScmStatus{
-				Added:    1,
-				Modified: 2,
-				Deleted:  3,
-				Moved:    4,
-				Unmerged: 5,
-			},
+			Added:    1,
+			Modified: 2,
+			Deleted:  3,
+			Moved:    4,
+			Unmerged: 5,
 		},
 	}
 	status := p.Status.String()
@@ -302,12 +301,10 @@ func TestPlasticTemplateString(t *testing.T) {
 			Plastic: &Plastic{
 				Selector: "/main",
 				Status: &PlasticStatus{
-					ScmStatus: ScmStatus{
-						Added:    2,
-						Modified: 3,
-						Deleted:  1,
-						Moved:    4,
-					},
+					Added:    2,
+					Modified: 3,
+					Deleted:  1,
+					Moved:    4,
 				},
 			},
 		},
@@ -323,10 +320,9 @@ func TestPlasticTemplateString(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		props := options.Map{
-			FetchStatus: true,
-		}
-		tc.Plastic.options = props
+		tc.Plastic.options = options.Map{}
+		// the status probe is derived from template references now
+		tc.Plastic.SetReferencedFields(template.RefSet{Fields: plasticStatusFields, Analyzable: true})
 		env := new(mock.Environment)
 		tc.Plastic.env = env
 		assert.Equal(t, tc.Expected, renderTemplate(env, tc.Template, tc.Plastic), tc.Case)

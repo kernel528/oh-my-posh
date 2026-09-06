@@ -99,6 +99,22 @@ export default {
       items: [
         {
           type: "category",
+          label: "Agents",
+          collapsed: true,
+          link: {
+            type: "generated-index",
+            title: "Agents",
+            description: "Segments for statusline and AI agent integrations.",
+          },
+          items: [
+            "segments/agents/antigravity",
+            "segments/agents/claude",
+            "segments/agents/copilot",
+            "segments/agents/copilot-cli",
+          ],
+        },
+        {
+          type: "category",
           label: "CLI",
           collapsed: true,
           link: {
@@ -114,10 +130,7 @@ export default {
             "segments/cli/bazel",
             "segments/cli/buf",
             "segments/cli/bun",
-            "segments/cli/claude",
             "segments/cli/cmake",
-            "segments/cli/copilot",
-            "segments/cli/copilot-cli",
             "segments/cli/deno",
             "segments/cli/docker",
             "segments/cli/firebase",

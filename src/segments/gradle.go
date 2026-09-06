@@ -21,7 +21,7 @@ func (g *Gradle) Template() string {
 }
 
 func (g *Gradle) Enabled() bool {
-	g.extensions = []string{"*.gradle", "*.gradle.kts"}
+	g.loadSpec()
 
 	executable := gradle
 	gradlew, err := g.env.HasParentFilePath("gradlew", false)
@@ -29,6 +29,12 @@ func (g *Gradle) Enabled() bool {
 		executable = gradlew.Path
 	}
 
+	// Not marked versionCacheable: getVersion is always set below, so this
+	// command never takes runCommand's executable-invocation branch (the
+	// only one the flag affects) regardless of whether one is set. Left
+	// unset anyway to document why - the wrapper (gradlew) case this
+	// executable can resolve to reports a version pinned by the project's
+	// gradle-wrapper.properties, not by the script's own identity.
 	g.tooling = map[string]*cmd{
 		gradle: {
 			executable: executable,
@@ -41,6 +47,21 @@ func (g *Gradle) Enabled() bool {
 	g.versionURLTemplate = "https://github.com/gradle/gradle/releases/tag/v{{ .Full }}"
 
 	return g.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation.
+func (g *Gradle) Activation() Activation {
+	g.loadSpec()
+
+	return g.activation()
+}
+
+// loadSpec holds the file spec only; the tooling depends on a gradlew lookup
+// that stays in Enabled().
+func (g *Gradle) loadSpec() {
+	g.extensions = []string{"*.gradle", "*.gradle.kts"}
+	// populated by parseExtraVersions inside the gated getVersion closure
+	g.extraVersionFields = []string{"KotlinVersion", "GroovyVersion", "AntVersion", "JVMVersion"}
 }
 
 func (g *Gradle) buildGetVersion(executable string) getVersion {

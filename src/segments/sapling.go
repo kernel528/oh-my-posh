@@ -43,6 +43,10 @@ const (
 	SLCOMMITTEMPLATE = "no:{node}\nns:{sl_node}\nnd:{sl_date}\nun:{sl_user}\nbm:{activebookmark}\ndn:{desc|firstline}"
 )
 
+// saplingStatusFields lists what the `sl status` scan populates: the single
+// probe this segment derives from its templates (see FieldRefs).
+var saplingStatusFields = []string{workingField}
+
 type Sapling struct {
 	Working     *SaplingStatus
 	ShortHash   string
@@ -52,11 +56,17 @@ type Sapling struct {
 	Bookmark    string
 	Description string
 	Scm
+	FieldRefs
 	New bool
 }
 
 func (sl *Sapling) Template() string {
 	return " {{ if .Bookmark }}\uf097 {{ .Bookmark }}*{{ else }}\ue729 {{ .ShortHash }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ end }} "
+}
+
+// Activation gates on the repository marker shouldDisplay searches for.
+func (sl *Sapling) Activation() Activation {
+	return Activation{ProjectFiles: []string{".sl"}}
 }
 
 func (sl *Sapling) Enabled() bool {
@@ -115,9 +125,9 @@ func (sl *Sapling) setHeadContext() {
 	sl.setCommitContext()
 
 	statusFormats := sl.options.KeyValueMap(StatusFormats, map[string]string{})
-	sl.Working = &SaplingStatus{ScmStatus: ScmStatus{Formats: statusFormats}}
+	sl.Working = &SaplingStatus{Formats: statusFormats}
 
-	displayStatus := sl.options.Bool(FetchStatus, true)
+	displayStatus := sl.fetchUnit(saplingStatusFields...)
 	if !displayStatus {
 		return
 	}

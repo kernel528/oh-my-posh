@@ -22,9 +22,7 @@ const (
 
 func NewYtmda(env runtime.Environment) *Ytmda {
 	flow := &Ytmda{
-		model: model{
-			env: env,
-		},
+		env: env,
 	}
 
 	flow.model.status = flow.status
@@ -65,7 +63,7 @@ func (y *Ytmda) Authenticate() {
 		return
 	}
 
-	cache.Set(cache.Device, auth.YTMDATOKEN, token, cache.INFINITE)
+	cache.Device.Set(auth.YTMDATOKEN, token, cache.INFINITE)
 
 	setState(done)
 }

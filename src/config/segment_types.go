@@ -11,6 +11,12 @@ type SegmentType string
 // SegmentWriter is the interface used to define what and if to write to the prompt
 type SegmentWriter interface {
 	Enabled() bool
+	// Activation declares the cheap preconditions under which the writer can
+	// possibly be enabled; the engine skips Enabled() entirely when none of
+	// them holds (see runtime.Activation for the contract). Called after
+	// Init(), so implementations may consult their options. segments.Base
+	// provides the default (Always) implementation.
+	Activation() runtime.Activation
 	Template() string
 	SetText(text string)
 	SetIndex(index int)
@@ -30,6 +36,8 @@ const (
 	Diamond SegmentStyle = "diamond"
 	// ANGULAR writes which angular cli version us currently active
 	ANGULAR SegmentType = "angular"
+	// ANTIGRAVITY writes Antigravity CLI session information
+	ANTIGRAVITY SegmentType = "antigravity"
 	// ARGOCD writes the current argocd context
 	ARGOCD SegmentType = "argocd"
 	// ASPIRE writes the Aspire apphost status
@@ -284,6 +292,14 @@ func (segment *Segment) MapSegmentWithWriter(env runtime.Environment) error {
 	// recorded data instead.
 	if writer != nil {
 		writer.Init(segment.Options, env)
+	}
+
+	// After Init, so the writer can layer the analyzed field set on top of a
+	// fully initialized state. Unstamped segments (config never resolved)
+	// deliver an unanalyzable set whose heuristic sources are the segment's
+	// own raw texts, so even library callers get display-correct fetching.
+	if consumer, ok := writer.(FieldSetConsumer); ok {
+		consumer.SetReferencedFields(segment.refSet())
 	}
 
 	segment.writer = writer

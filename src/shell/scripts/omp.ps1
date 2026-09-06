@@ -1,5 +1,5 @@
-if ($null -ne (Get-Module -Name "oh-my-posh-core")) {
-    Remove-Module -Name "oh-my-posh-core" -Force
+if (($null -ne (Get-Module -Name "oh-my-posh-core")) -and $global:_ompInitialized) {
+    return
 }
 
 $env:VIRTUAL_ENV_DISABLE_PROMPT = 1
@@ -993,6 +993,10 @@ New-Module -Name "oh-my-posh-core" -ScriptBlock {
     }
 
     function Enable-PoshStreaming {
+        if (Test-Path Env:POSH_DISABLE_STREAMING) {
+            return
+        }
+
         $global:_ompStreaming = $true
 
         if (-not $script:ServeSupported) {

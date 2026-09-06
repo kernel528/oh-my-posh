@@ -30,6 +30,12 @@ func (s *MercurialStatus) add(code string) {
 	}
 }
 
+// mercurialStatusFields lists what setMercurialStatus populates: the single
+// probe this segment derives from its templates (see FieldRefs).
+var mercurialStatusFields = []string{
+	workingField, "LocalCommitNumber", "ChangeSetID", "ChangeSetIDShort", "Branch", "Bookmarks", "Tags", "IsTip",
+}
+
 type Mercurial struct {
 	Working           *MercurialStatus
 	LocalCommitNumber string
@@ -39,11 +45,17 @@ type Mercurial struct {
 	Scm
 	Bookmarks []string
 	Tags      []string
-	IsTip     bool
+	FieldRefs
+	IsTip bool
 }
 
 func (hg *Mercurial) Template() string {
 	return "hg {{.Branch}} {{if .LocalCommitNumber}}({{.LocalCommitNumber}}:{{.ChangeSetIDShort}}){{end}}{{range .Bookmarks }} \uf02e {{.}}{{end}}{{range .Tags}} \uf02b {{.}}{{end}}{{if .Working.Changed}} \uf044 {{ .Working.String }}{{ end }}" //nolint: lll
+}
+
+// Activation gates on the repository marker shouldDisplay searches for.
+func (hg *Mercurial) Activation() Activation {
+	return Activation{ProjectFiles: []string{".hg"}}
 }
 
 func (hg *Mercurial) Enabled() bool {
@@ -52,9 +64,9 @@ func (hg *Mercurial) Enabled() bool {
 	}
 
 	statusFormats := hg.options.KeyValueMap(StatusFormats, map[string]string{})
-	hg.Working = &MercurialStatus{ScmStatus: ScmStatus{Formats: statusFormats}}
+	hg.Working = &MercurialStatus{Formats: statusFormats}
 
-	displayStatus := hg.options.Bool(FetchStatus, false)
+	displayStatus := hg.fetchUnit(mercurialStatusFields...)
 	if displayStatus {
 		hg.setMercurialStatus()
 	}

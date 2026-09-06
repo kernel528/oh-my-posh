@@ -16,20 +16,35 @@ func (m *Mojo) Template() string {
 }
 
 func (m *Mojo) Enabled() bool {
+	m.loadSpec()
+
+	return m.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation.
+func (m *Mojo) Activation() Activation {
+	m.loadSpec()
+
+	return m.activation()
+}
+
+func (m *Mojo) loadSpec() {
 	m.extensions = []string{"*.🔥", "*.mojo", "mojoproject.toml"}
 	m.tooling = map[string]*cmd{
 		mojoToolName: {
-			executable: mojoToolName,
-			args:       []string{versionFlagArg},
-			regex:      `(?:mojo (?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
+			executable:       mojoToolName,
+			args:             []string{versionFlagArg},
+			regex:            `(?:mojo (?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
+			versionCacheable: true,
 		},
 	}
 	m.defaultTooling = []string{mojoToolName}
 	m.displayMode = m.options.String(DisplayMode, DisplayModeEnvironment)
 	m.Language.loadContext = m.loadContext
 	m.Language.inContext = m.inContext
-
-	return m.Language.Enabled()
+	// the declared trigger for the pixi/magic virtual env context, keeping
+	// the activation gate and loadContext in sync
+	m.contextEnvVars = []string{"PIXI_ENVIRONMENT_NAME"}
 }
 
 func (m *Mojo) loadContext() {

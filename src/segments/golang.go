@@ -12,8 +12,8 @@ type Golang struct {
 }
 
 const (
-	ParseModFile  options.Option = "parse_mod_file"
-	ParseWorkFile options.Option = "parse_work_file"
+	ParseModFile    options.Option = "parse_mod_file"
+	ParseGoWorkFile options.Option = "parse_go_work_file"
 )
 
 func (g *Golang) Template() string {
@@ -21,12 +21,32 @@ func (g *Golang) Template() string {
 }
 
 func (g *Golang) Enabled() bool {
+	g.loadSpec()
+
+	return g.Language.Enabled()
+}
+
+// Activation implements the activation gate; see Language.activation.
+func (g *Golang) Activation() Activation {
+	g.loadSpec()
+
+	return g.activation()
+}
+
+func (g *Golang) loadSpec() {
 	g.extensions = []string{"*.go", "go.mod", "go.sum", "go.work", "go.work.sum"}
 	g.tooling = map[string]*cmd{
 		"mod": {
 			regex:      `(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+)(.(?P<patch>[0-9]+))?))`,
 			getVersion: g.getVersion,
 		},
+		// Not marked versionCacheable: with GOTOOLCHAIN=auto (the default
+		// since Go 1.21), `go version` itself - not just build/run/test -
+		// reads the nearest go.mod/go.work's go/toolchain directive and can
+		// switch to a different installed (or downloaded) toolchain before
+		// reporting its version. The same resolved "go" binary can therefore
+		// print a different version depending on the project it runs in;
+		// verified directly against this repo's toolchain.
 		"go": {
 			executable: "go",
 			args:       []string{versionArg},
@@ -35,8 +55,6 @@ func (g *Golang) Enabled() bool {
 	}
 	g.defaultTooling = []string{"mod", "go"}
 	g.versionURLTemplate = "https://golang.org/doc/go{{ .Major }}.{{ .Minor }}"
-
-	return g.Language.Enabled()
 }
 
 func (g *Golang) getVersion() (string, error) {
@@ -44,7 +62,7 @@ func (g *Golang) getVersion() (string, error) {
 		return g.parseModFile()
 	}
 
-	if g.options.Bool(ParseWorkFile, false) {
+	if g.options.Bool(ParseGoWorkFile, false) {
 		return g.parseWorkFile()
 	}
 

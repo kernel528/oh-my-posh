@@ -30,6 +30,16 @@ type UserConfig struct {
 	DefaultEndpoint string                    `json:"defaultEndpoint"`
 }
 
+// Activation gates on the sitecore.json marker in the cwd; the
+// .sitecore/user.json companion check stays in Enabled only (it looks
+// inside a subdirectory, which a cwd file glob cannot express).
+func (s *Sitecore) Activation() Activation {
+	return Activation{FileGlobs: []string{sitecoreFileName}}
+}
+
+// Enabled re-verifies the sitecore.json presence even though a passing gate
+// implies it: Force and pinned data bypass the gate, so Enabled must stay
+// standalone-correct. The re-check hits the memoized directory listing.
 func (s *Sitecore) Enabled() bool {
 	if !s.env.HasFiles(sitecoreFileName) || !s.env.HasFilesInDir(sitecoreFolderName, userFileName) {
 		log.Debug("sitecore cli configuration files were not found")

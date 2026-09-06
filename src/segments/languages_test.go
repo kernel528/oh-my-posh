@@ -46,6 +46,7 @@ func TestConfiguredLanguageFortranPreset(t *testing.T) {
 			extension:     "*.f",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		f := NewLanguage("fortran")
 		f.Init(props, env)
@@ -142,10 +143,9 @@ func TestConfiguredLanguageRubyPreset(t *testing.T) {
 		env.On("HasFiles", "Rakefile").Return(tc.HasRakeFile)
 		env.On("HasFiles", "Gemfile").Return(tc.HasGemFile)
 
-		props[options.FetchVersion] = tc.FetchVersion
-
 		ruby := NewLanguage("ruby")
 		ruby.Init(props, env)
+		setVersionRefs(ruby, tc.FetchVersion)
 
 		assert.True(t, ruby.Enabled(), tc.Case)
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, ruby.Template(), ruby), tc.Case)
@@ -180,6 +180,7 @@ func TestConfiguredLanguageClojurePreset(t *testing.T) {
 			extension:     "*.clj",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		props[LanguageExtensions] = []string{params.extension}
 		if tc.Cmd != "clojure" {
 			env.On("HasCommand", "clojure").Return(false)
@@ -207,6 +208,7 @@ func TestConfiguredLanguageCrystalPreset(t *testing.T) {
 			extension:     "*.cr",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		c := NewLanguage("crystal")
 		c.Init(props, env)
 		assert.True(t, c.Enabled(), tc.Case)
@@ -284,6 +286,7 @@ func TestConfiguredLanguageJuliaPreset(t *testing.T) {
 			extension:     "*.jl",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		j := NewLanguage("julia")
 		j.Init(props, env)
 		assert.True(t, j.Enabled(), tc.Case)
@@ -308,6 +311,7 @@ func TestConfiguredLanguageKotlinPreset(t *testing.T) {
 			extension:     "*.kt",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		k := NewLanguage("kotlin")
 		k.Init(props, env)
 		assert.True(t, k.Enabled(), tc.Case)
@@ -367,6 +371,7 @@ func TestConfiguredLanguageLuaPreset(t *testing.T) {
 			extension:     "*.lua",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		if !tc.HasLua {
 			env.Unset("HasCommand")
@@ -375,6 +380,8 @@ func TestConfiguredLanguageLuaPreset(t *testing.T) {
 
 		env.On("HasCommand", "luajit").Return(tc.HasLuaJit)
 		env.On("RunCommandWithEnv", "luajit", []string(nil), []string{"-v"}).Return(tc.Version, nil)
+		env.On("CommandPath", "luajit").Return("/usr/bin/luajit")
+		env.On("StatFile", "/usr/bin/luajit").Return(runtime.FileStat{ModTime: 1, Size: 1}, nil)
 		env.On("Shell").Return("bash")
 
 		// Initialize template system for version URL rendering
@@ -428,6 +435,7 @@ func TestConfiguredLanguageNimPreset(t *testing.T) {
 			extension:     "*.nim",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		n := NewLanguage("nim")
 		n.Init(props, env)
@@ -456,6 +464,7 @@ func TestConfiguredLanguageOCamlPreset(t *testing.T) {
 			extension:     "*.ml",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		o := NewLanguage("ocaml")
 		o.Init(props, env)
@@ -491,6 +500,7 @@ func TestConfiguredLanguagePerlPreset(t *testing.T) {
 			extension:     ".perl-version",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		p := NewLanguage("perl")
 		p.Init(props, env)
@@ -518,6 +528,7 @@ func TestConfiguredLanguagePhpPreset(t *testing.T) {
 			extension:     "*.php",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		j := NewLanguage("php")
 		j.Init(props, env)
@@ -559,11 +570,16 @@ func TestConfiguredLanguageRPreset(t *testing.T) {
 			extension:     "*.R",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 
 		env.On("HasCommand", "Rscript").Return(tc.HasRscript)
 		env.On("RunCommandWithEnv", "Rscript", []string(nil), []string{"--version"}).Return(tc.Version, nil)
+		env.On("CommandPath", "Rscript").Return("/usr/bin/Rscript")
+		env.On("StatFile", "/usr/bin/Rscript").Return(runtime.FileStat{ModTime: 1, Size: 1}, nil)
 		env.On("HasCommand", "R.exe").Return(tc.HasRexe)
 		env.On("RunCommandWithEnv", "R.exe", []string(nil), []string{"--version"}).Return(tc.Version, nil)
+		env.On("CommandPath", "R.exe").Return("/usr/bin/R.exe")
+		env.On("StatFile", "/usr/bin/R.exe").Return(runtime.FileStat{ModTime: 1, Size: 1}, nil)
 
 		r := NewLanguage("r")
 		r.Init(props, env)
@@ -637,6 +653,7 @@ func TestConfiguredLanguageSwiftPreset(t *testing.T) {
 			extension:     "*.swift",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		s := NewLanguage("swift")
 		s.Init(props, env)
 		assert.True(t, s.Enabled(), tc.Case)
@@ -675,6 +692,7 @@ func TestConfiguredLanguageVPreset(t *testing.T) {
 			extension:     "*.v",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		v := NewLanguage("v")
 		v.Init(props, env)
 		assert.True(t, v.Enabled(), tc.Case)
@@ -702,6 +720,7 @@ func TestConfiguredLanguageValaPreset(t *testing.T) {
 			extension:     "*.vala",
 		}
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		v := NewLanguage("vala")
 		v.Init(props, env)
 		assert.True(t, v.Enabled(), tc.Case)
@@ -720,9 +739,8 @@ func TestConfiguredLanguageCustomTools(t *testing.T) {
 	env.On("Home").Return("/usr/home")
 
 	props := options.Map{
-		options.FetchVersion: true,
-		LanguageName:         "mylang",
-		LanguageExtensions:   []string{"*.myl"},
+		LanguageName:       "mylang",
+		LanguageExtensions: []string{"*.myl"},
 		Tools: []any{
 			map[string]any{
 				"name":       "mytool",
@@ -793,6 +811,7 @@ func TestConfiguredLanguageZigPreset(t *testing.T) {
 		}
 
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		env.On("Shell").Return("bash")
 		template.Init(env, nil, nil)
 
@@ -837,6 +856,7 @@ func TestConfiguredLanguageDartPreset(t *testing.T) {
 		}
 
 		env, props := getMockedLanguageEnv(params)
+		mockVersionCacheable(env, params.cmd)
 		env.On("Shell").Return("bash")
 		template.Init(env, nil, nil)
 		env.On("HasCommand", "fvm").Return(false)
