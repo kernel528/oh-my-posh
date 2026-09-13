@@ -53,7 +53,7 @@ type Path struct {
 	pwd             string
 	Location        string
 	pathSeparator   string
-	Path            string
+	Path            template.Markup
 	Folders         Folders
 	StackCount      int
 	windowsPath     bool
@@ -219,48 +219,53 @@ func (pt *Path) setStyle() {
 			root += pt.getFolderSeparator()
 		}
 
-		pt.Path = pt.colorizePath(root, nil)
+		pt.Path = template.RawMarkup(pt.colorizePath(root, nil))
 		return
 	}
+
+	var styled string
 
 	switch style := pt.options.String(options.Style, Agnoster); style {
 	case Agnoster:
 		maxWidth := pt.getMaxWidth()
-		pt.Path = pt.getAgnosterPath(maxWidth)
+		styled = pt.getAgnosterPath(maxWidth)
 	case AgnosterFull:
-		pt.Path = pt.getAgnosterFullPath()
+		styled = pt.getAgnosterFullPath()
 	case AgnosterShort:
-		pt.Path = pt.getAgnosterShortPath()
+		styled = pt.getAgnosterShortPath()
 	case Mixed:
-		pt.Path = pt.getMixedPath()
+		styled = pt.getMixedPath()
 	case Letter:
-		pt.Path = pt.getLetterPath()
+		styled = pt.getLetterPath()
 	case Unique:
-		pt.Path = pt.getUniqueLettersPath(0)
+		styled = pt.getUniqueLettersPath(0)
 	case AgnosterLeft:
-		pt.Path = pt.getAgnosterLeftPath()
+		styled = pt.getAgnosterLeftPath()
 	case Full, Short: // "short" is a duplicate of "full", just here for backwards compatibility
-		pt.Path = pt.getFullPath()
+		styled = pt.getFullPath()
 	case FolderType:
-		pt.Path = pt.getFolderPath()
+		styled = pt.getFolderPath()
 	case Powerlevel:
 		maxWidth := pt.getMaxWidth()
-		pt.Path = pt.getUniqueLettersPath(maxWidth)
+		styled = pt.getUniqueLettersPath(maxWidth)
 	case Fish:
-		pt.Path = pt.getFishPath()
+		styled = pt.getFishPath()
 	default:
-		pt.Path = fmt.Sprintf("Path style: %s is not available", style)
+		styled = fmt.Sprintf("Path style: %s is not available", style)
 	}
 
 	// make sure we resolve all templates
 	//
-	// pt.Path is composed from raw filesystem folder names (untrusted) plus
-	// already-rendered config templates, so it must never get the func map
-	// entries that touch the OS (cmd/readFile/stat/glob) — use the restricted
-	// renderer, not template.Render.
-	if txt, err := template.RenderUntrusted(pt.Path, pt); err == nil {
-		pt.Path = txt
+	// styled mixes raw folder names (chevrons already escaped by
+	// replaceMappedLocations) with rendered config templates, so it must not
+	// get the functions that touch the OS (cmd, readFile, stat, glob): use
+	// the restricted renderer. Literal text, including the config anchors,
+	// passes through unchanged; embedded actions render escaped.
+	if txt, err := template.RenderUntrusted(styled, pt); err == nil {
+		styled = txt
 	}
+
+	pt.Path = template.RawMarkup(styled)
 }
 
 func (pt *Path) getMaxWidth() int {
@@ -658,9 +663,14 @@ func (pt *Path) replaceMappedLocations(inputPath string) (string, string) {
 		pt.RootDir = true
 	}
 
+	// folder names are untrusted and end up as template source (setStyle
+	// renders the styled path): chevrons would reach the writer as anchors and
+	// a template delimiter would run as an action
+	escape := template.EscapeSource
+
 	pt.setMappedLocations()
 	if len(pt.mappedLocations) == 0 {
-		return root, relative
+		return escape(root), escape(relative)
 	}
 
 	// sort map keys in reverse order
@@ -674,11 +684,6 @@ func (pt *Path) replaceMappedLocations(inputPath string) (string, string) {
 
 	rootN := pt.normalize(root)
 	relativeN := pt.normalize(relative)
-
-	escape := func(path string) string {
-		// Escape chevron characters to avoid applying unexpected text styles.
-		return strings.NewReplacer("<", "<<>", ">", "<>>").Replace(path)
-	}
 
 	handleRegex := func(key string) (string, bool) {
 		if !strings.HasPrefix(key, regexPrefix) {
@@ -719,7 +724,8 @@ func (pt *Path) replaceMappedLocations(inputPath string) (string, string) {
 
 	for _, key := range keys {
 		if input, OK := handleRegex(key); OK {
-			return pt.parsePath(input)
+			mappedRoot, mappedRelative := pt.parsePath(input)
+			return escape(mappedRoot), escape(mappedRelative)
 		}
 
 		keyRoot, keyRelative := pt.parsePath(key)

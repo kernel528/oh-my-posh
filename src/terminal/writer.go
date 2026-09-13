@@ -427,13 +427,14 @@ func ClearAfter() string {
 }
 
 func FormatTitle(title string) string {
+	// The title bypasses write()'s per-rune control filter.
+	title = stripControlRunes(trimAnsi(title))
+
 	switch Shell {
 	// These shells don't support setting the console title.
 	case shell.ELVISH, shell.XONSH:
 		return ""
 	case shell.BASH, shell.ZSH, shell.YASH:
-		title = trimAnsi(title)
-
 		sb := text.NewBuilder()
 
 		// We have to do this to prevent the shell from misidentifying escape sequences.
@@ -449,7 +450,7 @@ func FormatTitle(title string) string {
 
 		return fmt.Sprintf(formats.Title, sb.String())
 	default:
-		return fmt.Sprintf(formats.Title, trimAnsi(title))
+		return fmt.Sprintf(formats.Title, title)
 	}
 }
 
@@ -942,6 +943,16 @@ func write(s rune, isInvisible bool) {
 			return
 		}
 
+		// the OSC 8 URI region must survive the shell's prompt expansion
+		// intact, so apply the same shell escaping as visible runes; a URI
+		// backslash reaching bash's @P unescaped would be re-interpreted
+		if !Interactive {
+			if escaped, shouldEscape := formats.EscapeSequences[s]; shouldEscape {
+				builder.WriteString(escaped)
+				return
+			}
+		}
+
 		builder.WriteRune(s)
 
 		// Deliberately not captured. These runes are the OSC 8 target, which a terminal
@@ -1009,7 +1020,10 @@ func isOSCPayloadControlRune(s rune) bool {
 // Kept separate from write/isControlRune, which guard the streaming render
 // path instead.
 func stripControlRunes(s string) string {
-	if !strings.ContainsFunc(s, isOSCPayloadControlRune) {
+	// An invalid byte decodes as U+FFFD, which is not a control rune, so
+	// a raw C1 byte such as 0x9b would slip through the fast path; the
+	// loop below rewrites it to U+FFFD.
+	if utf8.ValidString(s) && !strings.ContainsFunc(s, isOSCPayloadControlRune) {
 		return s
 	}
 
@@ -1625,7 +1639,7 @@ func asAnsiColorsWithSource(background, foreground color.Ansi) (bg, fg, bgSource
 }
 
 func trimAnsi(txt string) string {
-	if txt == "" || !strings.Contains(txt, "\x1b") {
+	if txt == "" || !strings.ContainsAny(txt, "\x1b\u009b") {
 		return txt
 	}
 	return regex.ReplaceAllString(AnsiRegex, txt, "")

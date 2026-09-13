@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/color"
@@ -563,6 +564,87 @@ func TestPwd(t *testing.T) {
 	}
 }
 
+func TestFormatTitle(t *testing.T) {
+	cases := []struct {
+		Case     string
+		Shell    string
+		Title    string
+		Expected string
+	}{
+		{
+			Case:     "clean title, bash",
+			Shell:    shell.BASH,
+			Title:    "zsh in /home/user/omp",
+			Expected: "\\[\x1b]0;zsh in /home/user/omp\a\\]",
+		},
+		{
+			Case:     "bare BEL cannot terminate the OSC 0 sequence early, bash",
+			Shell:    shell.BASH,
+			Title:    "x\a[user@host ~]$ ",
+			Expected: "\\[\x1b]0;x[user@host ~]$ \a\\]",
+		},
+		{
+			Case:     "DECSTR in the title cannot reset the terminal, bash",
+			Shell:    shell.BASH,
+			Title:    "x\x1b[!p",
+			Expected: "\\[\x1b]0;x[!p\a\\]",
+		},
+		{
+			Case:     "APC payload in the title is inert, bash",
+			Shell:    shell.BASH,
+			Title:    "x\x1b_Gf=100,a=T;PAYLOAD\x1b\\",
+			Expected: "\\[\x1b]0;x_Gf=100,a=T;PAYLOAD\\\\\a\\]",
+		},
+		{
+			Case:     "SOS payload in the title is inert, bash",
+			Shell:    shell.BASH,
+			Title:    "x\x1bX swallowed \x1b\\",
+			Expected: "\\[\x1b]0;xX swallowed \\\\\a\\]",
+		},
+		{
+			Case:     "well-formed OSC is removed whole and % is escaped, zsh",
+			Shell:    shell.ZSH,
+			Title:    "100% \x1b]0;PWNED\a done",
+			Expected: "%{\x1b]0;100%%  done\a%}",
+		},
+		{
+			Case:     "generic shell strips control runes",
+			Shell:    shell.GENERIC,
+			Title:    "x\a\x1b[!p",
+			Expected: "\x1b]0;x[!p\a",
+		},
+		{
+			Case:     "elvish renders nothing",
+			Shell:    shell.ELVISH,
+			Title:    "x\a\x1b[!p",
+			Expected: "",
+		},
+		{
+			Case:     "xonsh renders nothing",
+			Shell:    shell.XONSH,
+			Title:    "x\a\x1b[!p",
+			Expected: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Case, func(t *testing.T) {
+			Init(tc.Shell)
+
+			got := FormatTitle(tc.Title)
+
+			assert.Equal(t, tc.Expected, got, tc.Case)
+
+			// the exact residue is cosmetic; what must hold is that no control
+			// rune remains inside the OSC body
+			if _, body, ok := strings.Cut(got, "]0;"); ok {
+				body, _, _ = strings.Cut(body, "\a")
+				assert.False(t, strings.ContainsFunc(body, isOSCPayloadControlRune), tc.Case)
+			}
+		})
+	}
+}
+
 func TestSetCursorStyle(t *testing.T) {
 	cases := []struct {
 		Case     string
@@ -651,6 +733,11 @@ func TestStripControlRunes(t *testing.T) {
 			Case:     "printable unicode is untouched",
 			Input:    "jan @ 世界 café",
 			Expected: "jan @ 世界 café",
+		},
+		{
+			Case:     "raw C1 byte in invalid UTF-8 cannot start a sequence",
+			Input:    "x\x9b2J",
+			Expected: "x\uFFFD2J",
 		},
 		{
 			Case:     "C0 and C1 control runes removed",
