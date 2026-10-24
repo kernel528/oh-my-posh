@@ -152,6 +152,7 @@ export default {
             "segments/cli/taskwarrior",
             "segments/cli/tauri",
             "segments/cli/terraform",
+            "segments/cli/timewarrior",
             "segments/cli/ui5tooling",
             "segments/cli/umbraco",
             "segments/cli/unity",
@@ -250,6 +251,7 @@ export default {
           },
           items: [
             "segments/music/lastfm",
+            "segments/music/pear",
             "segments/music/spotify",
             "segments/music/ytm",
           ],

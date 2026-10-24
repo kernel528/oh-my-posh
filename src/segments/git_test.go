@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -520,7 +521,7 @@ func TestEnabledInBareLayout(t *testing.T) {
 		env.On("FileContent", root+"/.git").Return("gitdir: ./.bare")
 		env.On("HasFilesInDir", root+"/.bare", "HEAD").Return(true)
 		env.On("FileContent", root+"/.bare/config").Return("[core]\n\tbare = true")
-		env.On("FileContent", root+"//HEAD").Return("")
+		env.On("FileContent", root+"/.bare/HEAD").Return("")
 		env.MockGitCommand(root+"/", "1234567890abcdef1234567890abcdef12345678", "rev-parse", "HEAD")
 		env.MockGitCommand(root+"/", "", "describe", "--tags", "--exact-match")
 		env.MockGitCommand(root+"/", "", "remote")
@@ -673,20 +674,89 @@ func TestEnabledInBareRepo(t *testing.T) {
 
 		env.On("HasParentFilePath", ".git", true).Return(&runtime.FileInfo{IsDir: true, Path: path}, nil)
 		env.On("FileContent", "git/HEAD").Return(tc.HEAD)
+		env.On("FileContent", "git/config").Return(configData)
 
 		g := &Git{}
 		g.Init(options.Map{}, env)
 		// bare info is derived: the config references .IsBare
 		g.SetReferencedFields(template.RefSet{Fields: []string{"IsBare"}, Analyzable: true})
 
-		g.configOnce = sync.Once{}
-		g.configOnce.Do(func() {
-			g.config, g.configErr = ini.Load(configData)
+		g.commonCfgOnce = sync.Once{}
+		g.commonCfgOnce.Do(func() {
+			g.commonCfg, g.commonCfgErr = ini.Load(configData)
 		})
 
 		_ = g.Enabled()
 
 		assert.Equal(t, tc.IsBare, g.IsBare, tc.Case)
+	}
+}
+
+func TestBareRepoUpstreamIsTrackingBranchNotRemoteList(t *testing.T) {
+	cases := []struct {
+		Case             string
+		Head             string
+		ForEachRefOutput string
+		ExpectedUpstream string
+	}{
+		{
+			Case:             "branch has an upstream",
+			Head:             "ref: refs/heads/main",
+			ForEachRefOutput: "origin/main\x00origin\x00refs/heads/main",
+			ExpectedUpstream: "origin/main",
+		},
+		{
+			Case:             "branch has no upstream configured",
+			Head:             "ref: refs/heads/main",
+			ForEachRefOutput: "\x00\x00refs/heads/main",
+			ExpectedUpstream: "",
+		},
+	}
+
+	for _, tc := range cases {
+		path := "git"
+		env := new(mock.Environment)
+		env.On("InWSLSharedDrive").Return(false)
+		env.On("GOOS").Return("")
+		env.On("HasCommand", "git").Return(true)
+
+		configData := "[core]\n\tbare = true\n[remote \"origin\"]\n\turl = https://github.com/example/example.git"
+
+		env.On("HasParentFilePath", ".git", true).Return(&runtime.FileInfo{IsDir: true, Path: path}, nil)
+		env.On("FileContent", "git/HEAD").Return(tc.Head)
+		env.On("FileContent", "git/config").Return(configData)
+
+		forEachRefArgs := []string{
+			"-C", path, "--no-optional-locks", "-c", "core.quotepath=false", "-c", "color.status=false",
+			"for-each-ref", "--format=%(upstream:short)%00%(upstream:remotename)%00%(refname)", "refs/heads/main",
+		}
+		env.On("RunCommand", "git", forEachRefArgs).Return(tc.ForEachRefOutput, nil)
+
+		// Mock remote list and get-url for bare repo info
+		remoteArgs := []string{
+			"-C", path, "--no-optional-locks", "-c", "core.quotepath=false", "-c", "color.status=false",
+			"remote",
+		}
+		env.On("RunCommand", "git", remoteArgs).Return("origin", nil)
+
+		remoteGetUrlArgs := []string{
+			"-C", path, "--no-optional-locks", "-c", "core.quotepath=false", "-c", "color.status=false",
+			"remote", "get-url", "origin",
+		}
+		env.On("RunCommand", "git", remoteGetUrlArgs).Return("https://github.com/example/example.git", nil)
+
+		g := &Git{}
+		g.Init(options.Map{}, env)
+		g.SetReferencedFields(template.RefSet{Fields: []string{"IsBare", "Upstream"}, Analyzable: true})
+
+		g.commonCfgOnce = sync.Once{}
+		g.commonCfgOnce.Do(func() {
+			g.commonCfg, g.commonCfgErr = ini.Load(configData)
+		})
+
+		_ = g.Enabled()
+
+		assert.Equal(t, tc.ExpectedUpstream, g.Upstream, tc.Case)
 	}
 }
 
@@ -710,6 +780,7 @@ func TestGetGitOutputForCommand(t *testing.T) {
 
 func TestSetGitHEADContextClean(t *testing.T) {
 	cases := []struct {
+		Options     options.Map
 		Ours        string
 		Expected    string
 		Ref         string
@@ -733,6 +804,28 @@ func TestSetGitHEADContextClean(t *testing.T) {
 			RebaseMerge: true,
 			Ours:        "refs/heads/origin/main",
 			Theirs:      "main",
+			Step:        "1",
+			Total:       "2",
+		},
+		{
+			Case:        "rebase merge with target resolution enabled",
+			Options:     options.Map{ResolveRebaseTarget: true},
+			Ref:         DETACHED,
+			Expected:    "rebase branch origin/main onto branch main (1/2) at commit 1234567",
+			RebaseMerge: true,
+			Ours:        "refs/heads/origin/main",
+			Theirs:      "main",
+			Step:        "1",
+			Total:       "2",
+		},
+		{
+			Case:        "rebase merge with target resolution disabled",
+			Options:     options.Map{ResolveRebaseTarget: false},
+			Ref:         DETACHED,
+			Expected:    "rebase branch origin/main onto branch 89abcde (1/2) at commit 1234567",
+			RebaseMerge: true,
+			Ours:        "refs/heads/origin/main",
+			Theirs:      "89abcdef0123456789abcdef0123456789abcdef01",
 			Step:        "1",
 			Total:       "2",
 		},
@@ -817,8 +910,10 @@ func TestSetGitHEADContextClean(t *testing.T) {
 		env.On("IsWsl").Return(false)
 		env.MockGitCommand("", "1234567890abcdef1234567890abcdef12345678", "rev-parse", "HEAD")
 		env.MockGitCommand("", "", "describe", "--tags", "--exact-match")
-		env.MockGitCommand("", tc.Theirs, "name-rev", "--name-only", "--exclude=tags/*", tc.Theirs)
-		env.MockGitCommand("", tc.Ours, "name-rev", "--name-only", "--exclude=tags/*", tc.Ours)
+		if tc.Options[ResolveRebaseTarget] != false {
+			env.MockGitCommand("", tc.Theirs, "name-rev", "--name-only", "--exclude=tags/*", tc.Theirs)
+			env.MockGitCommand("", tc.Ours, "name-rev", "--name-only", "--exclude=tags/*", tc.Ours)
+		}
 		// rebase merge
 		env.On("HasFolder", "/rebase-merge").Return(tc.RebaseMerge)
 		env.On("FileContent", "/rebase-merge/head-name").Return(tc.Ours)
@@ -852,6 +947,7 @@ func TestSetGitHEADContextClean(t *testing.T) {
 			TagIcon:        "tag ",
 			RevertIcon:     "revert ",
 		}
+		maps.Copy(props, tc.Options)
 
 		g := &Git{
 			command:   GITCOMMAND,
@@ -1200,12 +1296,12 @@ func TestGitUpstream(t *testing.T) {
 		}
 		g.Init(props, env)
 
-		g.configOnce = sync.Once{}
-		g.configOnce.Do(func() {
-			g.configErr = errors.New("no config")
+		g.commonCfgOnce = sync.Once{}
+		g.commonCfgOnce.Do(func() {
+			g.commonCfgErr = errors.New("no config")
 		})
 
-		upstreamIcon := g.getUpstreamIcon()
+		upstreamIcon := g.getUpstreamIcon(remoteNameOrOrigin(g.Upstream))
 		assert.Equal(t, tc.Expected, upstreamIcon.String(), tc.Case)
 	}
 }
@@ -1662,12 +1758,13 @@ func TestGitRemotes(t *testing.T) {
 
 		g := &Git{
 			repoRootDir: "foo",
+			scmDir:      ".git",
 		}
 		g.Init(options.Map{}, env)
 
-		g.configOnce = sync.Once{}
-		g.configOnce.Do(func() {
-			g.config, g.configErr = ini.Load(tc.Config)
+		g.commonCfgOnce = sync.Once{}
+		g.commonCfgOnce.Do(func() {
+			g.commonCfg, g.commonCfgErr = ini.Load(tc.Config)
 		})
 
 		got := g.Remotes()
@@ -1714,6 +1811,9 @@ func TestGitRepoName(t *testing.T) {
 		env := new(mock.Environment)
 		env.On("PathSeparator").Return("/")
 		env.On("GOOS").Return(runtime.LINUX)
+		env.On("HasFolder", testify_.Anything).Return(false)
+		env.On("HasFilesInDir", testify_.Anything, testify_.Anything).Return(false)
+		env.On("FileContent", testify_.Anything).Return("")
 
 		g := &Git{
 			repoRootDir: tc.RealDir,
@@ -2142,6 +2242,8 @@ func TestPushStatusAheadAndBehind(t *testing.T) {
 	for _, tc := range cases {
 		env := new(mock.Environment)
 		env.On("RunCommand", "git", []string{"-C", "/dir", "--no-optional-locks", "-c", "core.quotepath=false",
+			"-c", "color.status=false", "rev-parse", "--abbrev-ref", "@{push}"}).Return("origin/main", nil)
+		env.On("RunCommand", "git", []string{"-C", "/dir", "--no-optional-locks", "-c", "core.quotepath=false",
 			"-c", "color.status=false", "config", "--get", "remote.pushDefault"}).Return("", nil)
 		env.On("RunCommand", "git", []string{"-C", "/dir", "--no-optional-locks", "-c", "core.quotepath=false",
 			"-c", "color.status=false", "rev-list", "--count", "origin/main..HEAD"}).Return(tc.PushAheadCount, nil)
@@ -2161,14 +2263,14 @@ func TestPushStatusAheadAndBehind(t *testing.T) {
 		// push status is derived: the config references .PushAhead
 		g.SetReferencedFields(template.RefSet{Fields: []string{"PushAhead"}, Analyzable: true})
 
-		g.configOnce = sync.Once{}
-		g.configOnce.Do(func() {
+		g.commonCfgOnce = sync.Once{}
+		g.commonCfgOnce.Do(func() {
 			if len(tc.Config) > 0 {
-				g.config, g.configErr = ini.Load(tc.Config)
+				g.commonCfg, g.commonCfgErr = ini.Load(tc.Config)
 				return
 			}
 
-			g.configErr = errors.New("no config")
+			g.commonCfgErr = errors.New("no config")
 		})
 
 		g.setPushStatus()
@@ -2363,14 +2465,13 @@ func TestSetUserNative(t *testing.T) {
 	require.NoError(t, err)
 
 	// A bare mock.Environment would panic on the FileContent() call
-	// getGitConfig() makes (getGitConfig always reads through the mocked
-	// env, unlike the gitstatus package). Stubbing only FileContent, with
+	// commonConfig() reads through the mocked env. Stubbing only FileContent, with
 	// no RunCommand expectation at all, proves setUser reads the local
 	// config without ever spawning git.
 	env := new(mock.Environment)
-	env.On("FileContent", gitDir+"/config").Return(string(configData))
+	env.On("FileContent", testify_.Anything).Return(string(configData))
 
-	g := &Git{mainSCMDir: gitDir}
+	g := &Git{mainSCMDir: gitDir, scmDir: gitDir}
 	g.Init(options.Map{}, env)
 	g.User = &User{}
 

@@ -96,6 +96,7 @@ func init() {
 	gob.Register(&segments.Owm{})
 	gob.Register(&segments.Path{})
 	gob.Register(&segments.Folders{})
+	gob.Register(&segments.Pear{})
 	gob.Register(&segments.Plastic{})
 	gob.Register(&segments.PlasticStatus{})
 	gob.Register(&segments.Pnpm{})
@@ -125,6 +126,7 @@ func init() {
 	gob.Register(&segments.Terraform{})
 	gob.Register(&segments.Text{})
 	gob.Register(&segments.Time{})
+	gob.Register(&segments.Timewarrior{})
 	gob.Register(&segments.Todoist{})
 	gob.Register(&segments.UI5Tooling{})
 	gob.Register(&segments.Umbraco{})
@@ -215,6 +217,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	OS:              func() SegmentWriter { return &segments.Os{} },
 	OWM:             func() SegmentWriter { return &segments.Owm{} },
 	PATH:            func() SegmentWriter { return &segments.Path{} },
+	PEAR:            func() SegmentWriter { return &segments.Pear{} },
 	PERL:            func() SegmentWriter { return segments.NewLanguage(string(PERL)) },
 	PHP:             func() SegmentWriter { return segments.NewLanguage(string(PHP)) },
 	PLASTIC:         func() SegmentWriter { return &segments.Plastic{} },
@@ -246,6 +249,7 @@ var Segments = map[SegmentType]func() SegmentWriter{
 	TERRAFORM:       func() SegmentWriter { return &segments.Terraform{} },
 	TEXT:            func() SegmentWriter { return &segments.Text{} },
 	TIME:            func() SegmentWriter { return &segments.Time{} },
+	TIMEWARRIOR:     func() SegmentWriter { return &segments.Timewarrior{} },
 	TODOIST:         func() SegmentWriter { return &segments.Todoist{} },
 	UI5TOOLING:      func() SegmentWriter { return &segments.UI5Tooling{} },
 	UMBRACO:         func() SegmentWriter { return &segments.Umbraco{} },

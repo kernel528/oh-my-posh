@@ -73,6 +73,14 @@ func EscapeSource(s string) string {
 
 var delimiterReplacer = strings.NewReplacer("{{", `{{"{{"}}`)
 
+// UnescapeSource lets code measure or cut escaped data as it was; escape the
+// result again before it goes back into template source.
+func UnescapeSource(s string) string {
+	return sourceUnescaper.Replace(s)
+}
+
+var sourceUnescaper = strings.NewReplacer(`{{"{{"}}`, "{{", "<<>", "<", "<>>", ">")
+
 // The session cache stores segment data as map[string]any (interface values)
 // and gob-encodes it per process; an unregistered concrete type inside an
 // interface fails to encode and the whole segment entry is silently dropped.
@@ -142,6 +150,31 @@ func ReviveMarkup(value any) any {
 	case []any:
 		for i, nested := range typed {
 			typed[i] = ReviveMarkup(nested)
+		}
+
+		return typed
+	default:
+		return value
+	}
+}
+
+// TrustMarkup walks a generically decoded value and promotes every string to
+// Markup, in place for maps and slices. It marks user-authored configuration
+// data (the var section) as trusted; never call it with data read from the
+// filesystem, a VCS, or the network.
+func TrustMarkup(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return Markup(typed)
+	case map[string]any:
+		for key, nested := range typed {
+			typed[key] = TrustMarkup(nested)
+		}
+
+		return typed
+	case []any:
+		for i, nested := range typed {
+			typed[i] = TrustMarkup(nested)
 		}
 
 		return typed

@@ -276,6 +276,10 @@
     "docId": "path"
   },
   {
+    "type": "pear",
+    "docId": "pear"
+  },
+  {
     "type": "perl",
     "docId": "perl"
   },
@@ -398,6 +402,10 @@
   {
     "type": "time",
     "docId": "time"
+  },
+  {
+    "type": "timewarrior",
+    "docId": "timewarrior"
   },
   {
     "type": "todoist",

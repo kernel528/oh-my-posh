@@ -2070,6 +2070,20 @@
         }
       }
     },
+    "pear": {
+      "data": {
+        "Artist": "Men I Trust",
+        "Icon": " ",
+        "Segment": {
+          "Index": 68,
+          "Text": " x "
+        },
+        "Status": "playing",
+        "Text": " x ",
+        "Track": "Show Me How"
+      },
+      "enabled": true
+    },
     "perl": {
       "data": {
         "BuildMetadata": "",
@@ -2450,7 +2464,7 @@
     "spotify": {
       "data": {
         "Artist": "Tycho",
-        "Icon": " ",
+        "Icon": " ",
         "Segment": {
           "Index": 86,
           "Text": " x "
@@ -2695,6 +2709,21 @@
           "Index": 98,
           "Text": " x "
         },
+        "Text": " x "
+      },
+      "enabled": true
+    },
+    "timewarrior": {
+      "data": {
+        "Active": true,
+        "Annotation": "Writing code",
+        "Duration": "1h30m0s",
+        "Segment": {
+          "Index": 99,
+          "Text": " x "
+        },
+        "Start": "2026-10-12T09:00:00Z",
+        "Tags": "#project #work",
         "Text": " x "
       },
       "enabled": true

@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 )
 
 // SegmentType the type of segment, for more information, see the constants
@@ -20,7 +21,7 @@ type SegmentWriter interface {
 	Template() string
 	SetText(text string)
 	SetIndex(index int)
-	Text() string
+	Text() template.Markup
 	Init(props options.Provider, env runtime.Environment)
 	CacheKey() (string, bool)
 }
@@ -174,6 +175,8 @@ const (
 	OWM SegmentType = "owm"
 	// PATH represents the current path segment
 	PATH SegmentType = "path"
+	// PEAR writes the currently playing song in Pear Desktop
+	PEAR SegmentType = "pear"
 	// PERL writes which perl version is currently active
 	PERL SegmentType = "perl"
 	// PHP writes which php version is currently active
@@ -236,6 +239,8 @@ const (
 	TEXT SegmentType = "text"
 	// TIME writes the current timestamp
 	TIME SegmentType = "time"
+	// TIMEWARRIOR writes Timewarrior tracking status, tags and annotation
+	TIMEWARRIOR SegmentType = "timewarrior"
 	// TODOIST segment
 	TODOIST SegmentType = "todoist"
 	// UI5 Tooling segment

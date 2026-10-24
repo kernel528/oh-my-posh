@@ -3807,7 +3807,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/23277273?v=4",
       "profile": "http://peng.ly",
       "contributions": [
-        "code"
+        "code",
+        "doc"
       ]
     },
     {
@@ -3826,6 +3827,102 @@
       "profile": "https://stuff.interfree.ca",
       "contributions": [
         "code"
+      ]
+    },
+    {
+      "login": "TanbirRamim",
+      "name": "Tanbir Hossain Ramim",
+      "avatar_url": "https://avatars.githubusercontent.com/u/96797470?v=4",
+      "profile": "https://www.tanbirramim.com",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Dev-next-gen",
+      "name": "Leo Camus",
+      "avatar_url": "https://avatars.githubusercontent.com/u/188639646?v=4",
+      "profile": "https://nextgen-labs.net/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Sarcastic-Soul",
+      "name": "Anish Kumar",
+      "avatar_url": "https://avatars.githubusercontent.com/u/142567151?v=4",
+      "profile": "https://anish-k.vercel.app/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "minKasent",
+      "name": "dangkhoa",
+      "avatar_url": "https://avatars.githubusercontent.com/u/211428799?v=4",
+      "profile": "https://zalo.me/0868484572",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "St0rmingBr4in",
+      "name": "Julien DOCHE",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6610087?v=4",
+      "profile": "https://www.st0rmingbr4in.com",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "keltroth",
+      "name": "Django Janny",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1488327?v=4",
+      "profile": "https://www.djangojanny.net",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "cmp0xff",
+      "name": "Yi-Fan Wang",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5564164?v=4",
+      "profile": "https://github.com/cmp0xff",
+      "contributions": [
+        "code",
+        "design"
+      ]
+    },
+    {
+      "login": "sebb0",
+      "name": "Sebastian Semrau",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1463370?v=4",
+      "profile": "https://github.com/sebb0",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "dhanush0x96c",
+      "name": "Dhanush Shetty",
+      "avatar_url": "https://avatars.githubusercontent.com/u/154754292?v=4",
+      "profile": "https://github.com/dhanush0x96c",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "robbyrussell",
+      "name": "Robby Russell",
+      "avatar_url": "https://avatars.githubusercontent.com/u/257?v=4",
+      "profile": "https://www.planetargon.com/robby",
+      "contributions": [
+        "doc"
       ]
     }
   ],
