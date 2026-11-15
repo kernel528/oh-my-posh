@@ -64,7 +64,7 @@ func TestUmbracoSegment(t *testing.T) {
 			HasWebConfig:     false,
 			ExpectedEnabled:  true, // Segment should be enabled and visible
 			Template:         "{{ .Version }}",
-			ExpectedString:   "12.1.2",
+			ExpectedString:   "17.4.0",
 		},
 		{
 			Case:                    "Umbraco Folder with a .csproj [without Umbraco] and a web.config",
@@ -94,7 +94,7 @@ func TestUmbracoSegment(t *testing.T) {
 			HasCSProjWithoutUmbraco: true,
 			ExpectedEnabled:         true, // Segment should be enabled and visible
 			Template:                "{{ .Version }}",
-			ExpectedString:          "12.1.2",
+			ExpectedString:          "17.4.0",
 		},
 		{
 			Case:             "Umbraco Folder and .csproj with custom template",
@@ -102,7 +102,7 @@ func TestUmbracoSegment(t *testing.T) {
 			HasCsproj:        true,
 			ExpectedEnabled:  true,
 			Template:         "Version:{{ .Version }} ModernUmbraco:{{ .Modern }}",
-			ExpectedString:   "Version:12.1.2 ModernUmbraco:true",
+			ExpectedString:   "Version:17.4.0 ModernUmbraco:true",
 		},
 	}
 
