@@ -3487,10 +3487,10 @@
       ]
     },
     {
-      "login": "MrRainbow0704",
+      "login": "Kaleid0-scop3",
       "name": "Marco Simone",
       "avatar_url": "https://avatars.githubusercontent.com/u/95081253?v=4",
-      "profile": "https://github.com/MrRainbow0704",
+      "profile": "https://github.com/Kaleid0-scop3",
       "contributions": [
         "code",
         "design",
@@ -3923,6 +3923,34 @@
       "profile": "https://www.planetargon.com/robby",
       "contributions": [
         "doc"
+      ]
+    },
+    {
+      "login": "markksantos",
+      "name": "Mark Santos",
+      "avatar_url": "https://avatars.githubusercontent.com/u/24554186?v=4",
+      "profile": "https://www.markstudios.com",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "VictorMoni",
+      "name": "Victor Moni",
+      "avatar_url": "https://avatars.githubusercontent.com/u/123900844?v=4",
+      "profile": "http://victormoni.vercel.app",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "thelastbackspace",
+      "name": "thelastbackspace",
+      "avatar_url": "https://avatars.githubusercontent.com/u/23155651?v=4",
+      "profile": "https://github.com/thelastbackspace",
+      "contributions": [
+        "code"
       ]
     }
   ],
